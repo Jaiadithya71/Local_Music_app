@@ -1,0 +1,198 @@
+package com.contentagent.vibestream.player
+
+import android.content.Context
+import android.net.Uri
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
+import com.contentagent.vibestream.data.extractor.YouTubeExtractor
+import com.contentagent.vibestream.data.model.Song
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import java.io.File
+
+/**
+ * Controller orchestrating Media3 ExoPlayer for both direct YouTube streaming
+ * and offline local file playback.
+ */
+class MusicPlayerController(
+    private val context: Context,
+    private val extractor: YouTubeExtractor
+) {
+
+    private val playerScope = CoroutineScope(Dispatchers.Main + Job())
+    private var progressTrackerJob: Job? = null
+
+    private val exoPlayer: ExoPlayer = ExoPlayer.Builder(context).build().apply {
+        repeatMode = Player.REPEAT_MODE_OFF
+    }
+
+    private val _currentSong = MutableStateFlow<Song?>(null)
+    val currentSong: StateFlow<Song?> = _currentSong.asStateFlow()
+
+    private val _isPlaying = MutableStateFlow(false)
+    val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
+
+    private val _isBuffering = MutableStateFlow(false)
+    val isBuffering: StateFlow<Boolean> = _isBuffering.asStateFlow()
+
+    private val _currentPosition = MutableStateFlow(0L)
+    val currentPosition: StateFlow<Long> = _currentPosition.asStateFlow()
+
+    private val _duration = MutableStateFlow(0L)
+    val duration: StateFlow<Long> = _duration.asStateFlow()
+
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+
+    init {
+        exoPlayer.addListener(object : Player.Listener {
+            override fun onIsPlayingChanged(playing: Boolean) {
+                _isPlaying.value = playing
+                if (playing) {
+                    startProgressTracker()
+                } else {
+                    stopProgressTracker()
+                }
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                when (playbackState) {
+                    Player.STATE_BUFFERING -> {
+                        _isBuffering.value = true
+                    }
+                    Player.STATE_READY -> {
+                        _isBuffering.value = false
+                        val d = exoPlayer.duration
+                        if (d > 0) _duration.value = d
+                    }
+                    Player.STATE_ENDED -> {
+                        _isBuffering.value = false
+                        _isPlaying.value = false
+                        stopProgressTracker()
+                    }
+                    Player.STATE_IDLE -> {
+                        _isBuffering.value = false
+                    }
+                }
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                _isBuffering.value = false
+                _isPlaying.value = false
+                _errorMessage.value = "Playback error: ${error.localizedMessage}"
+            }
+        })
+    }
+
+    /**
+     * Plays a song:
+     * - If already downloaded, plays directly from device storage (file://).
+     * - If not downloaded, resolves direct audio stream URL and streams instantly.
+     */
+    fun playSong(song: Song) {
+        playerScope.launch {
+            _currentSong.value = song
+            _errorMessage.value = null
+            _isBuffering.value = true
+
+            val playableUri: Uri? = when {
+                // Play locally if file exists on device
+                song.isDownloaded && !song.localFilePath.isNullOrEmpty() && File(song.localFilePath!!).exists() -> {
+                    Uri.fromFile(File(song.localFilePath!!))
+                }
+                // Use already cached stream URL
+                !song.streamUrl.isNullOrEmpty() -> {
+                    Uri.parse(song.streamUrl)
+                }
+                // Resolve stream on-the-fly from YouTube
+                else -> {
+                    val resolved = extractor.resolveAudioStream(song.id)
+                    if (resolved != null) {
+                        song.streamUrl = resolved
+                        Uri.parse(resolved)
+                    } else {
+                        _isBuffering.value = false
+                        _errorMessage.value = "Unable to fetch audio stream for this track."
+                        return@launch
+                    }
+                }
+            }
+
+            if (playableUri != null) {
+                val metadata = MediaMetadata.Builder()
+                    .setTitle(song.title)
+                    .setArtist(song.artist)
+                    .setArtworkUri(if (song.thumbnailUrl.isNotEmpty()) Uri.parse(song.thumbnailUrl) else null)
+                    .build()
+
+                val mediaItem = MediaItem.Builder()
+                    .setUri(playableUri)
+                    .setMediaMetadata(metadata)
+                    .build()
+
+                exoPlayer.setMediaItem(mediaItem)
+                exoPlayer.prepare()
+                exoPlayer.play()
+            }
+        }
+    }
+
+    fun togglePlayPause() {
+        if (exoPlayer.isPlaying) {
+            exoPlayer.pause()
+        } else {
+            exoPlayer.play()
+        }
+    }
+
+    fun seekTo(positionMs: Long) {
+        exoPlayer.seekTo(positionMs)
+        _currentPosition.value = positionMs
+    }
+
+    fun skipForward(seconds: Int = 10) {
+        val newPos = (exoPlayer.currentPosition + seconds * 1000).coerceAtMost(exoPlayer.duration)
+        seekTo(newPos)
+    }
+
+    fun skipBackward(seconds: Int = 10) {
+        val newPos = (exoPlayer.currentPosition - seconds * 1000).coerceAtLeast(0L)
+        seekTo(newPos)
+    }
+
+    fun clearError() {
+        _errorMessage.value = null
+    }
+
+    private fun startProgressTracker() {
+        progressTrackerJob?.cancel()
+        progressTrackerJob = playerScope.launch {
+            while (isActive) {
+                _currentPosition.value = exoPlayer.currentPosition
+                val d = exoPlayer.duration
+                if (d > 0) _duration.value = d
+                delay(500)
+            }
+        }
+    }
+
+    private fun stopProgressTracker() {
+        progressTrackerJob?.cancel()
+        progressTrackerJob = null
+    }
+
+    fun release() {
+        stopProgressTracker()
+        exoPlayer.release()
+    }
+}

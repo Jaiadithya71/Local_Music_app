@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">VibeStream</string>
+    <string name="search_hint">Search songs, artists, albums…</string>
+    <string name="tab_discover">Discover</string>
+    <string name="tab_offline">Downloads</string>
+    <string name="download_completed">Downloaded to device</string>
+    <string name="downloading">Downloading…</string>
+    <string name="no_downloads">No downloaded songs yet. Search and tap download to listen offline!</string>
+    <string name="no_search_results">No tracks found. Try another search query.</string>
+</resources>

@@ -1,0 +1,47 @@
+# ==========================================
+# Operating System files
+# ==========================================
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# ==========================================
+# Android & Gradle
+# ==========================================
+.gradle/
+build/
+*/build/
+*/*/build/
+local.properties
+*.iml
+.idea/
+.navigation/
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+
+# ==========================================
+# Python & Web
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.env
+.venv/
+env/
+venv/
+ENV/
+*.key
+*.crt
+*.pem
+
+# ==========================================
+# Logs & Temp
+# ==========================================
+*.log
+*.tmp
+scratch/

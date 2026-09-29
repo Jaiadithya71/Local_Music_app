@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VibeStream Android — Preview & Download APK</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #09090b;
+      --card: #121216;
+      --card-elevated: #1a1a22;
+      --border: rgba(255, 255, 255, 0.08);
+      --green: #1db954;
+      --green-glow: rgba(29, 185, 84, 0.35);
+      --orange: #ff7a00;
+      --text: #ffffff;
+      --subtext: #a1a1aa;
+      --dim: #71717a;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 32px 16px 64px;
+    }
+
+    .container {
+      max-width: 1080px;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 36px;
+    }
+
+    /* Header */
+    .header {
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .badge-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      background: rgba(29, 185, 84, 0.12);
+      border: 1px solid rgba(29, 185, 84, 0.3);
+      border-radius: 9999px;
+      color: var(--green);
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .title {
+      font-size: clamp(2rem, 4vw, 3rem);
+      font-weight: 900;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+      background: linear-gradient(135deg, #ffffff 40%, #a1a1aa 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .subtitle {
+      color: var(--subtext);
+      font-size: clamp(0.95rem, 1.8vw, 1.15rem);
+      max-width: 600px;
+      line-height: 1.5;
+    }
+
+    /* Main Showcase Grid */
+    .showcase-grid {
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: 36px;
+      align-items: start;
+    }
+
+    @media (max-width: 860px) {
+      .showcase-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Interactive Phone Frame */
+    .phone-column {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .phone-tabs {
+      display: flex;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 4px;
+      gap: 4px;
+      width: 100%;
+      max-width: 380px;
+    }
+
+    .phone-tab-btn {
+      flex: 1;
+      background: none;
+      border: none;
+      color: var(--subtext);
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-align: center;
+    }
+
+    .phone-tab-btn.active {
+      background: var(--card-elevated);
+      color: var(--text);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    }
+
+    .phone-mockup {
+      width: 100%;
+      max-width: 360px;
+      height: 700px;
+      background: #000000;
+      border: 8px solid #222226;
+      border-radius: 44px;
+      position: relative;
+      box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.8), 0 0 40px rgba(29, 185, 84, 0.15);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .phone-notch {
+      width: 120px;
+      height: 22px;
+      background: #222226;
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      border-bottom-left-radius: 14px;
+      border-bottom-right-radius: 14px;
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .phone-speaker {
+      width: 44px;
+      height: 3px;
+      background: #444;
+      border-radius: 2px;
+    }
+
+    .phone-screen-container {
+      width: 100%;
+      height: 100%;
+      overflow-y: auto;
+      background: #000000;
+      padding-top: 30px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Screen Views */
+    .screen-view {
+      display: none;
+      flex-direction: column;
+      height: 100%;
+      padding: 16px;
+      gap: 14px;
+    }
+
+    .screen-view.active {
+      display: flex;
+    }
+
+    /* Screen 1: Discover */
+    .mock-search-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #181818;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 10px 14px;
+      color: #fff;
+      font-size: 0.85rem;
+    }
+
+    .mock-genres {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    .mock-genre-chip {
+      background: #222222;
+      border: 1px solid rgba(255,255,255,0.06);
+      padding: 6px 12px;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      white-space: nowrap;
+      color: #ddd;
+    }
+
+    .mock-genre-chip.active {
+      background: var(--green);
+      color: #000;
+    }
+
+    .mock-song-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: #141414;
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 12px;
+      padding: 8px 10px;
+    }
+
+    .mock-thumb {
+      width: 48px;
+      height: 48px;
+      border-radius: 8px;
+      object-fit: cover;
+      background: #252525;
+      flex-shrink: 0;
+    }
+
+    .mock-song-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .mock-song-title {
+      font-size: 0.84rem;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: #fff;
+    }
+
+    .mock-song-sub {
+      font-size: 0.72rem;
+      color: #888;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 2px;
+    }
+
+    .mock-tag {
+      background: rgba(29, 185, 84, 0.2);
+      color: var(--green);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 0.65rem;
+      font-weight: 700;
+    }
+
+    .mock-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .mock-btn-round {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: #222;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 0.75rem;
+    }
+
+    .mock-btn-round.play {
+      background: var(--green);
+      color: #000;
+    }
+
+    /* Screen 2: Autocomplete */
+    .mock-suggestion-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      font-size: 0.84rem;
+      color: #eee;
+    }
+
+    /* Screen 3: Now Playing */
+    .mock-player-sheet {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      height: 100%;
+      justify-content: space-around;
+      padding: 20px 8px;
+    }
+
+    .mock-art-big {
+      width: 220px;
+      height: 220px;
+      border-radius: 20px;
+      box-shadow: 0 16px 36px rgba(0,0,0,0.8);
+      object-fit: cover;
+    }
+
+    .mock-scrubber {
+      width: 100%;
+      height: 4px;
+      background: #333;
+      border-radius: 2px;
+      position: relative;
+      margin: 14px 0 6px;
+    }
+
+    .mock-scrubber-fill {
+      width: 45%;
+      height: 100%;
+      background: var(--green);
+      border-radius: 2px;
+    }
+
+    /* Info Column */
+    .info-column {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 24px;
+    }
+
+    .dl-hero-card {
+      background: linear-gradient(135deg, rgba(29, 185, 84, 0.15) 0%, rgba(18, 18, 22, 1) 80%);
+      border: 1px solid rgba(29, 185, 84, 0.35);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .btn-download-apk {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      background: var(--green);
+      color: #000000;
+      text-decoration: none;
+      font-weight: 800;
+      font-size: 1.05rem;
+      padding: 16px 24px;
+      border-radius: 14px;
+      box-shadow: 0 8px 24px var(--green-glow);
+      transition: all 0.2s ease;
+    }
+
+    .btn-download-apk:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 30px var(--green-glow);
+      filter: brightness(1.08);
+    }
+
+    .btn-open-web {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      background: var(--card-elevated);
+      color: var(--text);
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 0.95rem;
+      padding: 13px 20px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      transition: all 0.2s ease;
+    }
+
+    .btn-open-web:hover {
+      background: #242430;
+      border-color: rgba(255,255,255,0.15);
+    }
+
+    .specs-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+
+    .spec-item {
+      background: var(--card-elevated);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+    }
+
+    .spec-label {
+      font-size: 0.72rem;
+      color: var(--dim);
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+    }
+
+    .spec-val {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-top: 4px;
+    }
+
+    .features-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .feature-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      font-size: 0.88rem;
+      color: var(--subtext);
+      line-height: 1.4;
+    }
+
+    .feature-icon {
+      color: var(--green);
+      font-size: 1.1rem;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div class="badge-pill">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+        Native Android APK Built & Audited
+      </div>
+      <h1 class="title">VibeStream for Android</h1>
+      <p class="subtitle">Experience Spotify-quality music streaming with 100% genuine YouTube audio, live search autocomplete, and zero-latency offline downloads.</p>
+    </div>
+
+    <!-- Main Showcase -->
+    <div class="showcase-grid">
+
+      <!-- Left Column: Specs, Features & Download Actions -->
+      <div class="info-column">
+        <!-- Download Hero Card -->
+        <div class="card dl-hero-card">
+          <div>
+            <div style="font-size: 0.8rem; color: var(--green); font-weight: 800; text-transform: uppercase;">Direct Package Install</div>
+            <div style="font-size: 1.4rem; font-weight: 800; margin-top: 4px;">Get VibeStream for Android</div>
+            <div style="font-size: 0.88rem; color: var(--subtext); margin-top: 6px;">Ready to run standalone on your Android phone without needing any computer or server running in the background.</div>
+          </div>
+
+          <a href="/download/apk?file=1" class="btn-download-apk" id="downloadApkBtn">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+            Download APK (19.0 MB)
+          </a>
+
+          <a href="/" class="btn-open-web">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon></svg>
+            Open Web Player in Browser (Live Test)
+          </a>
+        </div>
+
+        <!-- Specs Grid -->
+        <div class="card">
+          <div style="font-size: 0.95rem; font-weight: 800; margin-bottom: 14px;">Technical Specifications</div>
+          <div class="specs-grid">
+            <div class="spec-item">
+              <div class="spec-label">Package ID</div>
+              <div class="spec-val" style="font-size: 0.82rem; word-break: break-all;">com.contentagent.vibestream</div>
+            </div>
+            <div class="spec-item">
+              <div class="spec-label">File Size</div>
+              <div class="spec-val">19.0 MB</div>
+            </div>
+            <div class="spec-item">
+              <div class="spec-label">Android OS</div>
+              <div class="spec-val">Android 8.0+ (API 26–34)</div>
+            </div>
+            <div class="spec-item">
+              <div class="spec-label">Security Audit</div>
+              <div class="spec-val" style="color: var(--green);">Passed & Hardened</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Architecture Features -->
+        <div class="card">
+          <div style="font-size: 0.95rem; font-weight: 800; margin-bottom: 14px;">Phone-First Architecture</div>
+          <div class="features-list">
+            <div class="feature-item">
+              <div class="feature-icon">⚡</div>
+              <div><strong>Smart Playback Routing:</strong> When you pick a song, it instantly checks if it is saved to local storage (`file://`). If yes, it plays in 0ms without consuming any mobile data.</div>
+            </div>
+            <div class="feature-item">
+              <div class="feature-icon">🔍</div>
+              <div><strong>Live Autocomplete Engine:</strong> Real-time search recommendations query as you type on your keyboard with automated 220ms debounce.</div>
+            </div>
+            <div class="feature-item">
+              <div class="feature-icon">📱</div>
+              <div><strong>System Lock Screen & Media Controls:</strong> Built on Android Media3 ExoPlayer and `PlaybackService`. Audio plays seamlessly in the background when your screen is locked.</div>
+            </div>
+            <div class="feature-item">
+              <div class="feature-icon">🛡️</div>
+              <div><strong>Privacy & Scoped Storage:</strong> No sensitive permissions required (no camera, contacts, or location). Offline songs are safely compartmentalized in app-specific storage.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Interactive Phone Screen Mockup -->
+      <div class="phone-column">
+        <!-- Interactive Screen Switcher Tabs -->
+        <div class="phone-tabs">
+          <button class="phone-tab-btn active" onclick="switchPhoneScreen('discover')">Discover</button>
+          <button class="phone-tab-btn" onclick="switchPhoneScreen('search')">Suggestions</button>
+          <button class="phone-tab-btn" onclick="switchPhoneScreen('player')">Now Playing</button>
+          <button class="phone-tab-btn" onclick="switchPhoneScreen('downloads')">Downloads</button>
+        </div>
+
+        <!-- Phone Mockup Container -->
+        <div class="phone-mockup">
+          <div class="phone-notch"><div class="phone-speaker"></div></div>
+          
+          <div class="phone-screen-container">
+
+            <!-- SCREEN 1: DISCOVER -->
+            <div class="screen-view active" id="view-discover">
+              <div style="font-size: 1.25rem; font-weight: 900; margin-top: 4px;">Discover</div>
+              
+              <!-- Search Bar -->
+              <div class="mock-search-bar" onclick="switchPhoneScreen('search')" style="cursor: pointer;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                <span style="color: #666;">Search songs, artists, albums…</span>
+              </div>
+
+              <!-- Quick Genres -->
+              <div class="mock-genres">
+                <div class="mock-genre-chip active">All Music</div>
+                <div class="mock-genre-chip">Anirudh Hits</div>
+                <div class="mock-genre-chip">A.R. Rahman</div>
+                <div class="mock-genre-chip">Yuvan Vibes</div>
+              </div>
+
+              <div style="font-size: 0.8rem; font-weight: 700; color: #888; text-transform: uppercase;">Trending Tracks</div>
+
+              <!-- Song Cards -->
+              <div class="mock-song-card">
+                <img src="https://i.ytimg.com/vi/VU23OPQ1Pmc/hqdefault.jpg" class="mock-thumb" alt="">
+                <div class="mock-song-info">
+                  <div class="mock-song-title">Katchi Sera</div>
+                  <div class="mock-song-sub"><span class="mock-tag">TA</span> Sai Abhyankkar • 3:05</div>
+                </div>
+                <div class="mock-actions">
+                  <div class="mock-btn-round">⬇</div>
+                  <div class="mock-btn-round play" onclick="switchPhoneScreen('player')" style="cursor: pointer;">▶</div>
+                </div>
+              </div>
+
+              <div class="mock-song-card">
+                <img src="https://i.ytimg.com/vi/DsjRNPrvq6U/hqdefault.jpg" class="mock-thumb" alt="">
+                <div class="mock-song-info">
+                  <div class="mock-song-title">Hukum (Jailer)</div>
+                  <div class="mock-song-sub"><span class="mock-tag">TA</span> Anirudh Ravichander • 3:28</div>
+                </div>
+                <div class="mock-actions">
+                  <div class="mock-btn-round">⬇</div>
+                  <div class="mock-btn-round play" onclick="switchPhoneScreen('player')" style="cursor: pointer;">▶</div>
+                </div>
+              </div>
+
+              <div class="mock-song-card">
+                <img src="https://i.ytimg.com/vi/g0sYCahy_vg/hqdefault.jpg" class="mock-thumb" alt="">
+                <div class="mock-song-info">
+                  <div class="mock-song-title">Marakkuma Nenjam</div>
+                  <div class="mock-song-sub"><span class="mock-tag">TA</span> A.R. Rahman • 4:38</div>
+                </div>
+                <div class="mock-actions">
+                  <div class="mock-btn-round" style="color: var(--green);">✓</div>
+                  <div class="mock-btn-round play" onclick="switchPhoneScreen('player')" style="cursor: pointer;">▶</div>
+                </div>
+              </div>
+
+              <div class="mock-song-card">
+                <img src="https://i.ytimg.com/vi/fHI8X4OXluQ/hqdefault.jpg" class="mock-thumb" alt="">
+                <div class="mock-song-info">
+                  <div class="mock-song-title">Blinding Lights</div>
+                  <div class="mock-song-sub"><span class="mock-tag">EN</span> The Weeknd • 3:20</div>
+                </div>
+                <div class="mock-actions">
+                  <div class="mock-btn-round">⬇</div>
+                  <div class="mock-btn-round play" onclick="switchPhoneScreen('player')" style="cursor: pointer;">▶</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SCREEN 2: SEARCH SUGGESTIONS -->
+            <div class="screen-view" id="view-search">
+              <div class="mock-search-bar" style="border-color: var(--green);">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                <span style="color: #fff; font-weight: 600;">nathiyee</span>
+                <span style="margin-left: auto; color: #888; font-size: 0.75rem;">✕</span>
+              </div>
+
+              <div style="font-size: 0.75rem; color: #777; font-weight: 700; text-transform: uppercase;">Real-Time Search Recommendations</div>
+
+              <div style="background: #141418; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06); overflow: hidden;">
+                <div class="mock-suggestion-row" onclick="switchPhoneScreen('player')" style="cursor: pointer;">
+                  <span style="color: #888;">🔍</span>
+                  <span style="font-weight: 600;">nathiyee song</span>
+                  <span style="margin-left: auto; color: #555;">↗</span>
+                </div>
+                <div class="mock-suggestion-row" onclick="switchPhoneScreen('player')" style="cursor: pointer;">
+                  <span style="color: #888;">🔍</span>
+                  <span>nathiyee nathiyee lyrical</span>
+                  <span style="margin-left: auto; color: #555;">↗</span>
+                </div>
+                <div class="mock-suggestion-row" onclick="switchPhoneScreen('player')" style="cursor: pointer;">
+                  <span style="color: #888;">🔍</span>
+                  <span>nathiyee rhythm a r rahman</span>
+                  <span style="margin-left: auto; color: #555;">↗</span>
+                </div>
+                <div class="mock-suggestion-row" onclick="switchPhoneScreen('player')" style="cursor: pointer;">
+                  <span style="color: #888;">🔍</span>
+                  <span>nathiyee nathiyee unnaipola</span>
+                  <span style="margin-left: auto; color: #555;">↗</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- SCREEN 3: NOW PLAYING -->
+            <div class="screen-view" id="view-player">
+              <div class="mock-player-sheet">
+                <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
+                  <span style="color: #888; font-size: 0.75rem; cursor: pointer;" onclick="switchPhoneScreen('discover')">▼ Close</span>
+                  <span style="font-size: 0.75rem; font-weight: 700; color: #aaa; text-transform: uppercase;">Playing from YouTube</span>
+                  <span style="color: var(--green);">💚</span>
+                </div>
+
+                <img src="https://i.ytimg.com/vi/g0sYCahy_vg/hqdefault.jpg" class="mock-art-big" alt="">
+
+                <div style="width: 100%; text-align: left;">
+                  <div style="font-size: 1.15rem; font-weight: 800; color: #fff;">Marakkuma Nenjam</div>
+                  <div style="font-size: 0.85rem; color: #888; margin-top: 2px;">A.R. Rahman • VTK Original</div>
+                </div>
+
+                <div style="width: 100%;">
+                  <div class="mock-scrubber"><div class="mock-scrubber-fill"></div></div>
+                  <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: #777;">
+                    <span>1:42</span>
+                    <span>4:38</span>
+                  </div>
+                </div>
+
+                <div style="display: flex; align-items: center; justify-content: space-between; width: 90%;">
+                  <span style="font-size: 1.1rem; color: #888;">🔀</span>
+                  <span style="font-size: 1.4rem; color: #fff;">⏮</span>
+                  <div style="width: 52px; height: 52px; border-radius: 50%; background: var(--green); display: flex; align-items: center; justify-content: center; color: #000; font-size: 1.3rem;">⏸</div>
+                  <span style="font-size: 1.4rem; color: #fff;">⏭</span>
+                  <span style="font-size: 1.1rem; color: var(--green);">🔁</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- SCREEN 4: DOWNLOADS / OFFLINE -->
+            <div class="screen-view" id="view-downloads">
+              <div style="font-size: 1.25rem; font-weight: 900; margin-top: 4px;">Offline Library</div>
+              <div style="font-size: 0.78rem; color: var(--green); font-weight: 600;">✓ 3 Tracks Saved to Device Storage (0ms Play)</div>
+
+              <div class="mock-song-card" style="border-left: 3px solid var(--green);">
+                <img src="https://i.ytimg.com/vi/g0sYCahy_vg/hqdefault.jpg" class="mock-thumb" alt="">
+                <div class="mock-song-info">
+                  <div class="mock-song-title">Marakkuma Nenjam</div>
+                  <div class="mock-song-sub"><span class="mock-tag" style="background: rgba(29,185,84,0.3);">OFFLINE</span> 4.8 MB • M4A</div>
+                </div>
+                <div class="mock-actions">
+                  <div class="mock-btn-round play" onclick="switchPhoneScreen('player')" style="cursor: pointer;">▶</div>
+                </div>
+              </div>
+
+              <div class="mock-song-card" style="border-left: 3px solid var(--green);">
+                <img src="https://i.ytimg.com/vi/VU23OPQ1Pmc/hqdefault.jpg" class="mock-thumb" alt="">
+                <div class="mock-song-info">
+                  <div class="mock-song-title">Katchi Sera</div>
+                  <div class="mock-song-sub"><span class="mock-tag" style="background: rgba(29,185,84,0.3);">OFFLINE</span> 3.9 MB • M4A</div>
+                </div>
+                <div class="mock-actions">
+                  <div class="mock-btn-round play" onclick="switchPhoneScreen('player')" style="cursor: pointer;">▶</div>
+                </div>
+              </div>
+
+              <div style="padding: 16px; text-align: center; color: #666; font-size: 0.75rem;">
+                No internet required. Tracks stored in Scoped Storage play instantly even in Airplane Mode.
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    function switchPhoneScreen(screenName) {
+      document.querySelectorAll('.screen-view').forEach(v => v.classList.remove('active'));
+      document.querySelectorAll('.phone-tab-btn').forEach(b => b.classList.remove('active'));
+
+      const targetView = document.getElementById('view-' + screenName);
+      if (targetView) targetView.classList.add('active');
+
+      const tabs = ['discover', 'search', 'player', 'downloads'];
+      const idx = tabs.indexOf(screenName);
+      if (idx !== -1) {
+        document.querySelectorAll('.phone-tab-btn')[idx].classList.add('active');
+      }
+    }
+  </script>
+</body>
+</html>
