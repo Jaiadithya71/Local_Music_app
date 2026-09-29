@@ -6,7 +6,12 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
-import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
+import android.content.ComponentName
+import androidx.core.content.ContextCompat
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 import com.contentagent.vibestream.data.extractor.YouTubeExtractor
 import com.contentagent.vibestream.data.model.Song
 import kotlinx.coroutines.CoroutineScope
@@ -32,8 +37,23 @@ class MusicPlayerController(
     private val playerScope = CoroutineScope(Dispatchers.Main + Job())
     private var progressTrackerJob: Job? = null
 
-    private val exoPlayer: ExoPlayer = ExoPlayer.Builder(context).build().apply {
-        repeatMode = Player.REPEAT_MODE_OFF
+    // The service owns the sole player. Reconnecting an Activity never creates a second player.
+    private val controllerFuture = MediaController.Builder(
+        context, SessionToken(context, ComponentName(context, PlaybackService::class.java))
+    ).buildAsync()
+    private var controller: MediaController? = null
+
+    private suspend fun awaitController(): MediaController = suspendCancellableCoroutine { continuation ->
+        controller?.let { continuation.resume(it); return@suspendCancellableCoroutine }
+        controllerFuture.addListener({
+            try {
+                val connected = controllerFuture.get()
+                controller = connected
+                if (continuation.isActive) continuation.resume(connected)
+            } catch (e: Exception) {
+                if (continuation.isActive) continuation.cancel(e)
+            }
+        }, ContextCompat.getMainExecutor(context))
     }
 
     private val _currentSong = MutableStateFlow<Song?>(null)
@@ -54,8 +74,7 @@ class MusicPlayerController(
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
-    init {
-        exoPlayer.addListener(object : Player.Listener {
+    private val listener = object : Player.Listener {
             override fun onIsPlayingChanged(playing: Boolean) {
                 _isPlaying.value = playing
                 if (playing) {
@@ -72,7 +91,7 @@ class MusicPlayerController(
                     }
                     Player.STATE_READY -> {
                         _isBuffering.value = false
-                        val d = exoPlayer.duration
+                        val d = controller?.duration ?: 0L
                         if (d > 0) _duration.value = d
                     }
                     Player.STATE_ENDED -> {
@@ -86,12 +105,50 @@ class MusicPlayerController(
                 }
             }
 
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                restoreCurrentSong()
+            }
+
             override fun onPlayerError(error: PlaybackException) {
                 _isBuffering.value = false
                 _isPlaying.value = false
                 _errorMessage.value = "Playback error: ${error.localizedMessage}"
             }
-        })
+        }
+
+    init {
+        playerScope.launch {
+            try {
+                awaitController().addListener(listener)
+                restoreCurrentSong()
+                _isPlaying.value = controller?.isPlaying == true
+                if (_isPlaying.value) startProgressTracker()
+            } catch (e: Exception) {
+                _errorMessage.value = "Unable to connect to playback service: ${e.localizedMessage}"
+            }
+        }
+    }
+
+    private fun restoreCurrentSong() {
+        val item = controller?.currentMediaItem
+        if (item == null) {
+            _currentSong.value = null
+            return
+        }
+        val metadata = item.mediaMetadata
+        val id = item.mediaId
+        if (id.isBlank()) { _currentSong.value = null; return }
+        val uri = item.localConfiguration?.uri
+        val localPath = if (uri?.scheme == "file") uri.path else null
+        _currentSong.value = Song(
+            id = id,
+            title = metadata.title?.toString() ?: "Unknown title",
+            artist = metadata.artist?.toString() ?: "Unknown artist",
+            thumbnailUrl = metadata.artworkUri?.toString() ?: "",
+            streamUrl = if (localPath == null) uri?.toString() else null,
+            localFilePath = localPath,
+            isDownloaded = localPath != null
+        )
     }
 
     /**
@@ -101,13 +158,12 @@ class MusicPlayerController(
      */
     fun playSong(song: Song) {
         playerScope.launch {
-            _currentSong.value = song
             _errorMessage.value = null
             _isBuffering.value = true
 
             val playableUri: Uri? = when {
                 // Play locally if file exists on device
-                song.isDownloaded && !song.localFilePath.isNullOrEmpty() && File(song.localFilePath!!).exists() -> {
+                song.isDownloaded && !song.localFilePath.isNullOrEmpty() && File(song.localFilePath!!).isFile && File(song.localFilePath!!).length() > 0 -> {
                     Uri.fromFile(File(song.localFilePath!!))
                 }
                 // Use already cached stream URL
@@ -129,6 +185,11 @@ class MusicPlayerController(
             }
 
             if (playableUri != null) {
+                val player = try { awaitController() } catch (e: Exception) {
+                    _isBuffering.value = false
+                    _errorMessage.value = "Playback service unavailable: ${e.localizedMessage}"
+                    return@launch
+                }
                 val metadata = MediaMetadata.Builder()
                     .setTitle(song.title)
                     .setArtist(song.artist)
@@ -137,36 +198,40 @@ class MusicPlayerController(
 
                 val mediaItem = MediaItem.Builder()
                     .setUri(playableUri)
+                    .setMediaId(song.id)
                     .setMediaMetadata(metadata)
                     .build()
 
-                exoPlayer.setMediaItem(mediaItem)
-                exoPlayer.prepare()
-                exoPlayer.play()
+                _currentSong.value = song
+                player.setMediaItem(mediaItem)
+                player.prepare()
+                player.play()
             }
         }
     }
 
     fun togglePlayPause() {
-        if (exoPlayer.isPlaying) {
-            exoPlayer.pause()
+        if (controller?.isPlaying == true) {
+            controller?.pause()
         } else {
-            exoPlayer.play()
+            controller?.play()
         }
     }
 
     fun seekTo(positionMs: Long) {
-        exoPlayer.seekTo(positionMs)
+        controller?.seekTo(positionMs)
         _currentPosition.value = positionMs
     }
 
     fun skipForward(seconds: Int = 10) {
-        val newPos = (exoPlayer.currentPosition + seconds * 1000).coerceAtMost(exoPlayer.duration)
+        val player = controller ?: return
+        val newPos = (player.currentPosition + seconds * 1000).coerceAtMost(player.duration.coerceAtLeast(0))
         seekTo(newPos)
     }
 
     fun skipBackward(seconds: Int = 10) {
-        val newPos = (exoPlayer.currentPosition - seconds * 1000).coerceAtLeast(0L)
+        val player = controller ?: return
+        val newPos = (player.currentPosition - seconds * 1000).coerceAtLeast(0L)
         seekTo(newPos)
     }
 
@@ -178,8 +243,8 @@ class MusicPlayerController(
         progressTrackerJob?.cancel()
         progressTrackerJob = playerScope.launch {
             while (isActive) {
-                _currentPosition.value = exoPlayer.currentPosition
-                val d = exoPlayer.duration
+                _currentPosition.value = controller?.currentPosition ?: 0L
+                val d = controller?.duration ?: 0L
                 if (d > 0) _duration.value = d
                 delay(500)
             }
@@ -193,6 +258,8 @@ class MusicPlayerController(
 
     fun release() {
         stopProgressTracker()
-        exoPlayer.release()
+        controller?.removeListener(listener)
+        MediaController.releaseFuture(controllerFuture)
+        playerScope.coroutineContext[Job]?.cancel()
     }
 }

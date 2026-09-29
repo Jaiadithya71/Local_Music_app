@@ -2,6 +2,8 @@ package com.contentagent.vibestream.data.local
 
 import android.content.Context
 import android.os.Environment
+import android.media.MediaExtractor
+import android.media.MediaFormat
 import com.contentagent.vibestream.data.extractor.YouTubeExtractor
 import com.contentagent.vibestream.data.model.Song
 import kotlinx.coroutines.Dispatchers
@@ -45,6 +47,7 @@ class DownloadManager(
         downloadingSet.add(song.id)
         updateProgress(song.id, 0.05f)
 
+        var completedFile: File? = null
         try {
             // 1. Resolve direct audio stream URL if not already known
             val streamUrl = song.streamUrl ?: extractor.resolveAudioStream(song.id)
@@ -57,53 +60,70 @@ class DownloadManager(
 
             updateProgress(song.id, 0.15f)
 
-            // 2. Prepare target music file on device
+            // 2. Download to a temporary file. The MIME type, not an assumed codec,
+            // chooses the final extension. An interrupted transfer never enters the library.
             val musicDir = context.getExternalFilesDir(Environment.DIRECTORY_MUSIC) ?: context.filesDir
             if (!musicDir.exists()) musicDir.mkdirs()
-
-            // Clean sanitized file name and ID to prevent any path traversal
             val safeId = song.id.replace("[^a-zA-Z0-9_-]".toRegex(), "")
             val safeTitle = song.title.replace("[^a-zA-Z0-9.-]".toRegex(), "_").take(40)
-            val targetFile = File(musicDir, "${safeId}_$safeTitle.m4a")
-
-            // 3. Stream bytes to file
-            val request = Request.Builder().url(streamUrl).build()
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    downloadingSet.remove(song.id)
-                    removeProgress(song.id)
-                    onComplete?.invoke(false, "Download failed with HTTP ${response.code}")
-                    return@withContext
-                }
-
-                val body = response.body ?: throw IllegalStateException("Empty response body")
-                val totalBytes = body.contentLength()
-                var downloadedBytes = 0L
-
-                val inputStream = body.byteStream()
-                val outputStream = FileOutputStream(targetFile)
-
-                val buffer = ByteArray(8 * 1024)
-                var bytesRead: Int
-
-                while (inputStream.read(buffer).also { bytesRead = it } != -1) {
-                    outputStream.write(buffer, 0, bytesRead)
-                    downloadedBytes += bytesRead
-                    if (totalBytes > 0) {
-                        val progress = 0.15f + (downloadedBytes.toFloat() / totalBytes.toFloat()) * 0.85f
-                        updateProgress(song.id, progress.coerceIn(0.15f, 1f))
+            val tempFile = File.createTempFile("${safeId}_", ".part", musicDir)
+            var targetFile: File? = null
+            try {
+                val request = Request.Builder().url(streamUrl).build()
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) throw IllegalStateException("Download failed with HTTP ${response.code}")
+                    val mediaType = response.body?.contentType()?.toString()?.lowercase() ?: ""
+                    val extension = when {
+                        "audio/mp4" in mediaType || "audio/x-m4a" in mediaType -> "m4a"
+                        "audio/webm" in mediaType || "video/webm" in mediaType -> "webm"
+                        "audio/ogg" in mediaType -> "ogg"
+                        "audio/mpeg" in mediaType -> "mp3"
+                        else -> throw IllegalStateException("Unknown audio format: $mediaType")
                     }
+                    val body = response.body ?: throw IllegalStateException("Empty response body")
+                    val expected = body.contentLength()
+                    var downloaded = 0L
+                    FileOutputStream(tempFile).use { output ->
+                        body.byteStream().use { input ->
+                            val buffer = ByteArray(8192)
+                            while (true) {
+                                val count = input.read(buffer)
+                                if (count < 0) break
+                                output.write(buffer, 0, count)
+                                downloaded += count
+                                if (expected > 0) updateProgress(song.id,
+                                    (0.15f + downloaded.toFloat() / expected * 0.85f).coerceIn(0.15f, 1f))
+                            }
+                        }
+                        output.fd.sync()
+                    }
+                    if (downloaded == 0L || (expected >= 0 && downloaded != expected))
+                        throw IllegalStateException("Incomplete download: $downloaded of $expected bytes")
+                    // A nonempty HTTP body can still be an error page or corrupt container.
+                    // Let Android parse the saved bytes and require an audio track.
+                    val inspector = MediaExtractor()
+                    try {
+                        inspector.setDataSource(tempFile.absolutePath)
+                        val hasAudio = (0 until inspector.trackCount).any { index ->
+                            inspector.getTrackFormat(index).getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true
+                        }
+                        if (!hasAudio) throw IllegalStateException("Downloaded file has no playable audio track")
+                    } finally {
+                        inspector.release()
+                    }
+                    val finalFile = File(musicDir, "${safeId}_$safeTitle.$extension")
+                    if (!tempFile.renameTo(finalFile)) throw IllegalStateException("Could not save finished audio")
+                    targetFile = finalFile
+                    completedFile = finalFile
                 }
-
-                outputStream.flush()
-                outputStream.close()
-                inputStream.close()
+            } finally {
+                tempFile.delete()
             }
 
-            // 4. Save metadata to local offline storage
+            // 4. Save metadata only after the verified file has been renamed.
             val downloadedSong = song.copy(
                 streamUrl = streamUrl,
-                localFilePath = targetFile.absolutePath,
+                localFilePath = targetFile!!.absolutePath,
                 isDownloaded = true,
                 isDownloading = false,
                 downloadProgress = 1f
@@ -112,9 +132,10 @@ class DownloadManager(
 
             downloadingSet.remove(song.id)
             removeProgress(song.id)
-            onComplete?.invoke(true, targetFile.absolutePath)
+            onComplete?.invoke(true, targetFile!!.absolutePath)
 
         } catch (e: Exception) {
+            completedFile?.delete()
             e.printStackTrace()
             downloadingSet.remove(song.id)
             removeProgress(song.id)

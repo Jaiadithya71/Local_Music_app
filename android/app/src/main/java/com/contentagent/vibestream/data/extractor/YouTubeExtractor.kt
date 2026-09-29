@@ -12,8 +12,8 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Autonomous On-Device YouTube Extractor.
- * Runs 100% on the Android phone with zero server dependency.
- * Searches tracks and resolves direct high-fidelity audio streams with automated mirror failover.
+ * Runs on the Android phone using public upstream services.
+ * Searches tracks and resolves direct high-fidelity audio streams with public-mirror fallback.
  */
 class YouTubeExtractor {
 
@@ -180,7 +180,6 @@ class YouTubeExtractor {
                             val streamObj = streamItem.asJsonObject
                             val streamUrl = streamObj.get("url")?.asString ?: continue
                             val bitrate = streamObj.get("bitrate")?.asLong ?: 0L
-                            val format = streamObj.get("format")?.asString ?: ""
 
                             // Prioritize high-bitrate m4a/opus
                             if (bitrate >= highestBitrate) {
@@ -245,7 +244,7 @@ class YouTubeExtractor {
     }
 
     private fun formatDuration(seconds: Long): String {
-        if (seconds <= 0) return "0:00"
+        if (seconds <= 0) return "Unknown"
         val minutes = seconds / 60
         val remainingSec = seconds % 60
         return "$minutes:${remainingSec.toString().padStart(2, '0')}"

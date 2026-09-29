@@ -34,89 +34,6 @@ import com.contentagent.vibestream.ui.components.SongCard
 import com.contentagent.vibestream.ui.theme.*
 import kotlinx.coroutines.launch
 
-private val featuredTrendingTracks = listOf(
-    Song(
-        id = "IqwIOlhfCak",
-        title = "Badass (Leo)",
-        artist = "Anirudh Ravichander",
-        durationSec = 236,
-        durationText = "3:56",
-        thumbnailUrl = "https://i.ytimg.com/vi/IqwIOlhfCak/hqdefault.jpg"
-    ),
-    Song(
-        id = "DsjRNPrvq6U",
-        title = "Hukum - Thalaivar Alappara (Jailer)",
-        artist = "Anirudh Ravichander",
-        durationSec = 208,
-        durationText = "3:28",
-        thumbnailUrl = "https://i.ytimg.com/vi/DsjRNPrvq6U/hqdefault.jpg"
-    ),
-    Song(
-        id = "szvt1vD0Uug",
-        title = "Naa Ready (Leo)",
-        artist = "Thalapathy Vijay, Anirudh",
-        durationSec = 255,
-        durationText = "4:15",
-        thumbnailUrl = "https://i.ytimg.com/vi/szvt1vD0Uug/hqdefault.jpg"
-    ),
-    Song(
-        id = "-aVdxDDrcTc",
-        title = "Arabic Kuthu - Halamithi Habibo (Beast)",
-        artist = "Anirudh, Jonita Gandhi",
-        durationSec = 280,
-        durationText = "4:40",
-        thumbnailUrl = "https://i.ytimg.com/vi/-aVdxDDrcTc/hqdefault.jpg"
-    ),
-    Song(
-        id = "VU23OPQ1Pmc",
-        title = "Katchi Sera",
-        artist = "Sai Abhyankkar",
-        durationSec = 185,
-        durationText = "3:05",
-        thumbnailUrl = "https://i.ytimg.com/vi/VU23OPQ1Pmc/hqdefault.jpg"
-    ),
-    Song(
-        id = "a3Ue-LN5B9U",
-        title = "Aasa Kooda",
-        artist = "Sai Abhyankkar, Sai Smriti",
-        durationSec = 229,
-        durationText = "3:49",
-        thumbnailUrl = "https://i.ytimg.com/vi/a3Ue-LN5B9U/hqdefault.jpg"
-    ),
-    Song(
-        id = "g0sYCahy_vg",
-        title = "Marakkuma Nenjam (VTK)",
-        artist = "A.R. Rahman",
-        durationSec = 278,
-        durationText = "4:38",
-        thumbnailUrl = "https://i.ytimg.com/vi/g0sYCahy_vg/hqdefault.jpg"
-    ),
-    Song(
-        id = "YFYiTS46x-8",
-        title = "Hosanna (Vinnaithaandi Varuvaayaa)",
-        artist = "A.R. Rahman, Vijay Prakash",
-        durationSec = 337,
-        durationText = "5:37",
-        thumbnailUrl = "https://i.ytimg.com/vi/YFYiTS46x-8/hqdefault.jpg"
-    ),
-    Song(
-        id = "thtAxtEuX6c",
-        title = "En Kadhal Solla (Paiyaa)",
-        artist = "Yuvan Shankar Raja",
-        durationSec = 287,
-        durationText = "4:47",
-        thumbnailUrl = "https://i.ytimg.com/vi/thtAxtEuX6c/hqdefault.jpg"
-    ),
-    Song(
-        id = "fHI8X4OXluQ",
-        title = "Blinding Lights",
-        artist = "The Weeknd",
-        durationSec = 200,
-        durationText = "3:20",
-        thumbnailUrl = "https://i.ytimg.com/vi/fHI8X4OXluQ/hqdefault.jpg"
-    )
-)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
@@ -131,11 +48,25 @@ fun HomeScreen(
     var selectedTab by remember { mutableStateOf(0) } // 0 = Discover, 1 = Downloads
     var searchQuery by remember { mutableStateOf("") }
     var isSearching by remember { mutableStateOf(false) }
-    var searchResults by remember { mutableStateOf<List<Song>>(featuredTrendingTracks) }
+    var searchResults by remember { mutableStateOf<List<Song>>(emptyList()) }
     var searchError by remember { mutableStateOf<String?>(null) }
     var searchSuggestions by remember { mutableStateOf<List<String>>(emptyList()) }
     var showSuggestions by remember { mutableStateOf(false) }
     var isPlayerSheetVisible by remember { mutableStateOf(false) }
+
+    // The first screen shows actual upstream search metadata, or an empty/error state.
+    LaunchedEffect(Unit) {
+        isSearching = true
+        try {
+            val results = extractor.searchSongs("Tamil music")
+            searchResults = results
+            if (results.isEmpty()) searchError = "Music search is unavailable. Try searching again."
+        } catch (e: Exception) {
+            searchError = "Music search failed: ${e.localizedMessage}"
+        } finally {
+            isSearching = false
+        }
+    }
 
     // Real-time search recommendation autocomplete as user types
     LaunchedEffect(searchQuery) {
@@ -311,7 +242,7 @@ fun HomeScreen(
                             if (searchQuery.isNotEmpty()) {
                                 IconButton(onClick = {
                                     searchQuery = ""
-                                    searchResults = featuredTrendingTracks
+                                    searchResults = emptyList()
                                     searchError = null
                                     showSuggestions = false
                                 }) {

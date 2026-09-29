@@ -35,7 +35,7 @@ class OfflineStorage(private val context: Context) {
 
         // Verify the file still exists on disk
         val validSongs = songs.filter { song ->
-            song.localFilePath?.let { File(it).exists() } == true
+            song.localFilePath?.let { File(it).isFile && File(it).length() > 0 } == true
         }
 
         _downloadedSongs.value = validSongs
@@ -74,7 +74,7 @@ class OfflineStorage(private val context: Context) {
     }
 
     fun isDownloaded(videoId: String): Boolean {
-        return _downloadedSongs.value.any { it.id == videoId && it.localFilePath?.let { p -> File(p).exists() } == true }
+        return _downloadedSongs.value.any { it.id == videoId && it.localFilePath?.let { p -> File(p).isFile && File(p).length() > 0 } == true }
     }
 
     fun getLocalSong(videoId: String): Song? {

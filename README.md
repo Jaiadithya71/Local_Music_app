@@ -7,19 +7,19 @@
 [![Python](https://img.shields.io/badge/Web%20Companion-Python%203.10%2B-3776AB.svg?logo=python&logoColor=white)](web/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-An autonomous, Spotify-inspired music ecosystem featuring a **100% native serverless Android app** and a companion **responsive Web player & streaming server**. Browse, stream, search with live autocomplete recommendations, and download tracks offline directly to your device storage with zero-latency playback.
+An autonomous, Spotify-inspired music ecosystem featuring a **native Android app** and a companion **responsive Web player & streaming server**. Browse, stream, search with live autocomplete recommendations, and download tracks offline directly to your device storage without network streaming when saved locally.
 
 ---
 
 ## 🌟 Key Highlights
 
-* **📱 100% Serverless Android Mode**: Streams YouTube audio directly on-device using decentralized endpoints with automated multi-mirror failover. No personal server or PC required to run the app on your phone.
-* **⚡ Smart Playback Routing**: When picking a track, the app checks if it is saved in local device storage (`file://`). If present, it starts in **0ms without consuming any mobile data**; otherwise, it streams directly from the CDN.
+* **On-device Android mode**: Streams YouTube audio directly on-device using decentralized endpoints with multiple public Piped mirrors (availability not guaranteed). No personal server or PC required to run the app on your phone.
+* **Smart Playback Routing**: When picking a track, the app checks if it is saved in local device storage (`file://`). If present, it plays locally without streaming data; otherwise, it streams directly from the CDN.
 * **🔍 Search Engine Recommendations**: Instant autocomplete suggestions dynamically populate as you type in the search bar (debounced at 220ms), just like real search engines.
 * **🔒 Lock Screen & Media Controls**: Built with AndroidX Media3 `PlaybackService` and `MediaSessionService`. Keeps audio playing smoothly in the background when the phone is locked or while using other apps.
-* **💾 One-Tap Offline Download Pipeline**: Direct M4A/Opus audio caching to device storage with real-time progress indicators.
-* **🛡️ Hardened Security & Privacy**: Zero invasive permissions (no contacts, microphone, camera, or location). Uses Android Scoped Storage and sanitizes stream proxy inputs against SSRF.
-* **🌐 Web Companion & Wi-Fi Portal**: Includes a browser player with HTTP Range-streaming proxy and mobile device download landing page.
+* **💾 One-Tap Offline Download Pipeline**: Format-aware audio saving to device storage with real-time progress indicators.
+* **Privacy design**: Zero invasive permissions (no contacts, microphone, camera, or location). Uses Android Scoped Storage and sanitizes stream proxy inputs against SSRF.
+* **🌐 Web Companion & Local APK Page**: Includes a browser player with HTTP Range-streaming proxy and local APK download landing page.
 
 ---
 
@@ -36,7 +36,7 @@ An autonomous, Spotify-inspired music ecosystem featuring a **100% native server
    ┌────────┴────────┐                                         ┌────────┴────────┐
    ▼                 ▼                                         ▼                 ▼
 [Online Streaming] [Offline Downloads]                   [Browser Web Player] [APK Portal]
-(Media3 ExoPlayer) (Scoped Storage)                      (HTTP Range Proxy)   (Wi-Fi Install)
+(Media3 ExoPlayer) (Scoped Storage)                      (HTTP Range Proxy)   (Local Install)
    │                 │                                         │
    ▼                 ▼                                         ▼
 YouTube CDN      Local Device FS                          YouTube CDN
@@ -65,7 +65,7 @@ Local_Music_app/
 │
 ├── web/                             # Web Player & Streaming Server
 │   ├── index.html                   # Spotify Dark theme responsive web player
-│   ├── download.html                # Mobile phone preview & APK download landing page
+│   ├── download.html                # Local APK download landing page
 │   ├── server.py                    # Multi-threaded audio proxy with HTTP Range support
 │   └── requirements.txt             # Python dependencies (yt-dlp)
 │
@@ -103,9 +103,9 @@ android/app/build/outputs/apk/debug/app-debug.apk
 
 ---
 
-### 2. Web Companion & Wi-Fi Server (`web/`)
+### 2. Local Web Companion (`web/`)
 
-The web companion allows playing music directly in any browser and hosts the Wi-Fi APK download page for your home network.
+The web companion serves a browser player on the same computer and hosts the APK download page on the same computer.
 
 #### Installation:
 ```bash
@@ -118,8 +118,8 @@ pip install -r requirements.txt
 python server.py
 ```
 
-* **Web Music Player**: `http://localhost:5173`
-* **Mobile APK Download & Inspection Page**: `http://localhost:5173/download`
+* **Web Music Player**: `http://127.0.0.1:5173`
+* **APK page (local only)**: `http://127.0.0.1:5173/download`
 
 ---
 
@@ -135,4 +135,8 @@ python server.py
 ## 📄 License
 
 This project is licensed under the [MIT License](LICENSE).
+
+Browser downloads are stored as blobs in IndexedDB, not in the Android file store. Offline access is specific to the browser/profile used to save them.
 Audio and video metadata are sourced for personal educational and demonstration purposes.
+
+The web server binds to localhost only. Android relies on third-party Piped mirrors and YouTube availability. Playback and downloads have not been verified on a physical phone in this repository. An APK is not committed; build one locally before using the download page.

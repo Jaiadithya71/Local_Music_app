@@ -1,7 +1,7 @@
 """
 VibeStream Real YouTube Music Server
-Streams and downloads 100% genuine YouTube audio with zero CORS or 403 issues.
-Provides search, live stream proxying with HTTP Range support, and direct MP3/M4A download.
+Streams available YouTube audio through a local proxy; upstream failures remain possible.
+Provides search, live stream proxying with HTTP Range support, and format-aware download.
 """
 
 import http.server
@@ -13,6 +13,7 @@ import os
 import sys
 import re
 import threading
+import tempfile
 import yt_dlp
 
 # Force UTF-8 on Windows
@@ -42,7 +43,7 @@ def get_mime_type(ext: str) -> str:
         return 'audio/mpeg'
     elif ext in ['flac', 'wav']:
         return f'audio/{ext}'
-    return 'audio/mp4'
+    return 'application/octet-stream'
 
 def get_real_stream_url(video_id_or_query: str, force_refresh: bool = False):
     """Uses yt-dlp to extract the real direct audio stream URL and metadata with strict input validation."""
@@ -74,7 +75,6 @@ def get_real_stream_url(video_id_or_query: str, force_refresh: bool = False):
         'no_warnings': True,
         'format': 'bestaudio[ext=m4a]/bestaudio/best',
         'noplaylist': True,
-        'nocheckcertificate': True,
         'extract_flat': False,
     }
 
@@ -88,7 +88,7 @@ def get_real_stream_url(video_id_or_query: str, force_refresh: bool = False):
             title = info.get('title', 'Unknown Track')
             duration = info.get('duration', 0)
             thumbnail = info.get('thumbnail', '')
-            ext = info.get('ext', 'm4a')
+            ext = info.get('ext') or 'bin'
             mime = get_mime_type(ext)
 
             data = {
@@ -123,7 +123,6 @@ def search_youtube(query: str, limit: int = 10):
         'no_warnings': True,
         'extract_flat': True,
         'noplaylist': True,
-        'nocheckcertificate': True,
     }
     search_target = f"ytsearch{limit}:{safe_query}"
     results = []
@@ -141,7 +140,7 @@ def search_youtube(query: str, limit: int = 10):
                 duration_sec = item.get('duration') or 0
                 mins = int(duration_sec // 60)
                 secs = int(duration_sec % 60)
-                dur_str = f"{mins}:{secs:02d}" if duration_sec else "3:30"
+                dur_str = f"{mins}:{secs:02d}" if duration_sec else "Unknown"
 
                 uploader = item.get('uploader') or item.get('channel') or "YouTube Music"
 
@@ -245,7 +244,7 @@ class RealMusicHandler(http.server.SimpleHTTPRequestHandler):
 
             self.proxy_audio_stream(
                 info['stream_url'],
-                info.get('mime', 'audio/mp4'),
+                info.get('mime', 'application/octet-stream'),
                 video_id=info.get('id', video_id)
             )
             return
@@ -263,11 +262,11 @@ class RealMusicHandler(http.server.SimpleHTTPRequestHandler):
                 return
 
             safe_filename = re.sub(r'[^a-zA-Z0-9_\-.]', '_', info.get('title', 'song'))[:50]
-            ext = info.get('ext', 'm4a')
+            ext = info.get('ext') or 'bin'
 
             self.proxy_audio_stream(
                 info['stream_url'],
-                info.get('mime', 'audio/mp4'),
+                info.get('mime', 'application/octet-stream'),
                 download_filename=f"{safe_filename}.{ext}",
                 video_id=info.get('id', video_id)
             )
@@ -333,12 +332,43 @@ class RealMusicHandler(http.server.SimpleHTTPRequestHandler):
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         }
         client_range = self.headers.get('Range')
-        if client_range:
+        if client_range and not download_filename:
             headers['Range'] = client_range
 
         req = urllib.request.Request(cdn_url, headers=headers)
         try:
             with urllib.request.urlopen(req, timeout=15) as res:
+                if download_filename:
+                    # Stage the complete response before claiming it is a downloadable file.
+                    # A truncated upstream response must not become a saved offline track.
+                    if res.status != 200 or mime_type not in ('audio/mp4', 'audio/webm', 'audio/ogg', 'audio/mpeg'):
+                        self.send_error(502, "Unsupported audio response")
+                        return
+                    declared_length = res.headers.get('Content-Length')
+                    expected = int(declared_length) if declared_length is not None else None
+                    with tempfile.SpooledTemporaryFile(max_size=16 * 1024 * 1024) as staged:
+                        actual = 0
+                        while True:
+                            chunk = res.read(64 * 1024)
+                            if not chunk:
+                                break
+                            staged.write(chunk)
+                            actual += len(chunk)
+                        if not actual or (expected is not None and actual != expected):
+                            self.send_error(502, "Incomplete upstream audio")
+                            return
+                        staged.seek(0)
+                        self.send_response(200)
+                        self.send_header('Content-Type', mime_type)
+                        self.send_header('Content-Length', str(actual))
+                        self.send_header('Content-Disposition', f'attachment; filename="{download_filename}"')
+                        self.end_headers()
+                        while True:
+                            chunk = staged.read(64 * 1024)
+                            if not chunk:
+                                break
+                            self.wfile.write(chunk)
+                    return
                 status_code = res.status
                 self.send_response(status_code)
                 self.send_header('Content-Type', mime_type)
@@ -371,10 +401,14 @@ class RealMusicHandler(http.server.SimpleHTTPRequestHandler):
                 STREAM_CACHE.pop(video_id, None)
                 fresh_info = get_real_stream_url(video_id, force_refresh=True)
                 if fresh_info and fresh_info.get('stream_url'):
+                    new_name = download_filename
+                    if download_filename:
+                        safe_title = re.sub(r'[^a-zA-Z0-9_\-.]', '_', fresh_info.get('title', 'song'))[:50]
+                        new_name = f"{safe_title}.{fresh_info.get('ext') or 'bin'}"
                     return self.proxy_audio_stream(
                         fresh_info['stream_url'],
-                        fresh_info.get('mime', 'audio/mp4'),
-                        download_filename=download_filename
+                        fresh_info.get('mime', 'application/octet-stream'),
+                        download_filename=new_name
                     )
             try:
                 self.send_error(he.code, f"Stream error: {he.reason}")
@@ -382,8 +416,8 @@ class RealMusicHandler(http.server.SimpleHTTPRequestHandler):
                 pass
         except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, OSError):
             pass
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Audio proxy failed: {e}")
 
     def send_json(self, data, status: int = 200):
         body = json.dumps(data).encode('utf-8')
@@ -402,12 +436,12 @@ def run():
         daemon_threads = True
 
     try:
-        server = ThreadedHTTPServer(("", PORT), RealMusicHandler)
+        server = ThreadedHTTPServer(("127.0.0.1", PORT), RealMusicHandler)
         print("=" * 65)
         print(">> VIBESTREAM MUSIC PIPELINE LIVE")
         print("=" * 65)
-        print(f"-> Local Mobile URL: http://192.168.0.7:{PORT}/download")
-        print(f"-> Full Web Player:  http://192.168.0.7:{PORT}")
+        print(f"-> Web Player: http://127.0.0.1:{PORT}")
+        print("-> Local-only server; it is not reachable from another device.")
         print("=" * 65)
         print("Ready for continuous play & downloads. Press Ctrl+C to stop.\n")
         server.serve_forever()

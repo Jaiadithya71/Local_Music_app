@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Spotify — VibeStream Music</title>
+  <title>VibeStream Music</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Noto+Sans+Tamil:wght@400;600;700;900&display=swap" rel="stylesheet">
@@ -1035,7 +1035,7 @@
         <!-- Shelf 1: Made For You / Heavy Rotation -->
         <div class="section-shelf">
           <div class="section-shelf-header">
-            <span class="section-title">Made For You</span>
+            <span class="section-title">Live Tamil Search</span>
             <span class="section-see-all">Show all</span>
           </div>
           <div class="shelf-carousel" id="shelfMadeForYou">
@@ -1046,7 +1046,7 @@
         <!-- Shelf 2: Kollywood Chartbusters (Tamil First) -->
         <div class="section-shelf">
           <div class="section-shelf-header">
-            <span class="section-title">Kollywood Top 50</span>
+            <span class="section-title">More Live Results</span>
             <span class="section-see-all">Show all</span>
           </div>
           <div class="shelf-carousel" id="shelfKollywood">
@@ -1057,8 +1057,8 @@
         <!-- Vertical Tracks Feed (Recommendations) -->
         <div class="section-shelf">
           <div class="section-shelf-header">
-            <span class="section-title">Recommended Today</span>
-            <span style="font-size:0.75rem; color:var(--sp-green); font-weight:700;">● Continuous Radio</span>
+            <span class="section-title">Live Search Results</span>
+            <span style="font-size:0.75rem; color:var(--sp-green); font-weight:700;">● Upstream metadata</span>
           </div>
           <div class="tracks-vertical-list" id="homeTracksList">
             <!-- Injected track rows -->
@@ -1332,235 +1332,11 @@
     }
     initGreeting();
 
-    // AUTHENTIC YOUTUBE CATALOG (TAMIL FIRST, ENGLISH, HINDI, TELUGU)
-    const CATALOG = [
-      {
-        id: "IqwIOlhfCak",
-        title: "Badass (Leo)",
-        artist: "Anirudh Ravichander",
-        lang: "ta",
-        vibe: "Anirudh Hype",
-        duration: "3:56",
-        thumbnail: "https://i.ytimg.com/vi/IqwIOlhfCak/hqdefault.jpg",
-        streamUrl: "/api/stream?id=IqwIOlhfCak"
-      },
-      {
-        id: "DsjRNPrvq6U",
-        title: "Hukum - Thalaivar Alappara (Jailer)",
-        artist: "Anirudh Ravichander",
-        lang: "ta",
-        vibe: "Anirudh Hype",
-        duration: "3:28",
-        thumbnail: "https://i.ytimg.com/vi/DsjRNPrvq6U/hqdefault.jpg",
-        streamUrl: "/api/stream?id=DsjRNPrvq6U"
-      },
-      {
-        id: "szvt1vD0Uug",
-        title: "Naa Ready (Leo)",
-        artist: "Thalapathy Vijay, Anirudh",
-        lang: "ta",
-        vibe: "Anirudh Hype",
-        duration: "4:15",
-        thumbnail: "https://i.ytimg.com/vi/szvt1vD0Uug/hqdefault.jpg",
-        streamUrl: "/api/stream?id=szvt1vD0Uug"
-      },
-      {
-        id: "-aVdxDDrcTc",
-        title: "Arabic Kuthu - Halamithi Habibo (Beast)",
-        artist: "Anirudh, Jonita Gandhi",
-        lang: "ta",
-        vibe: "Anirudh Hype",
-        duration: "4:40",
-        thumbnail: "https://i.ytimg.com/vi/-aVdxDDrcTc/hqdefault.jpg",
-        streamUrl: "/api/stream?id=-aVdxDDrcTc"
-      },
-      {
-        id: "lM8h5Mm6ODo",
-        title: "Kaavalaa (Jailer)",
-        artist: "Anirudh, Shilpa Rao",
-        lang: "ta",
-        vibe: "Anirudh Hype",
-        duration: "2:54",
-        thumbnail: "https://i.ytimg.com/vi/lM8h5Mm6ODo/hqdefault.jpg",
-        streamUrl: "/api/stream?id=lM8h5Mm6ODo"
-      },
-      {
-        id: "fRD_3vJagxk",
-        title: "Vaathi Coming (Master)",
-        artist: "Anirudh Ravichander",
-        lang: "ta",
-        vibe: "Anirudh Hype",
-        duration: "4:17",
-        thumbnail: "https://i.ytimg.com/vi/fRD_3vJagxk/hqdefault.jpg",
-        streamUrl: "/api/stream?id=fRD_3vJagxk"
-      },
-      {
-        id: "VU23OPQ1Pmc",
-        title: "Katchi Sera",
-        artist: "Sai Abhyankkar",
-        lang: "ta",
-        vibe: "Tamil Indie",
-        duration: "3:05",
-        thumbnail: "https://i.ytimg.com/vi/VU23OPQ1Pmc/hqdefault.jpg",
-        streamUrl: "/api/stream?id=VU23OPQ1Pmc"
-      },
-      {
-        id: "a3Ue-LN5B9U",
-        title: "Aasa Kooda",
-        artist: "Sai Abhyankkar, Sai Smriti",
-        lang: "ta",
-        vibe: "Tamil Indie",
-        duration: "3:49",
-        thumbnail: "https://i.ytimg.com/vi/a3Ue-LN5B9U/hqdefault.jpg",
-        streamUrl: "/api/stream?id=a3Ue-LN5B9U"
-      },
-      {
-        id: "g0sYCahy_vg",
-        title: "Marakkuma Nenjam (VTK)",
-        artist: "A.R. Rahman",
-        lang: "ta",
-        vibe: "ARR Soul",
-        duration: "4:38",
-        thumbnail: "https://i.ytimg.com/vi/g0sYCahy_vg/hqdefault.jpg",
-        streamUrl: "/api/stream?id=g0sYCahy_vg"
-      },
-      {
-        id: "YFYiTS46x-8",
-        title: "Hosanna (Vinnaithaandi Varuvaayaa)",
-        artist: "A.R. Rahman, Vijay Prakash",
-        lang: "ta",
-        vibe: "ARR Soul",
-        duration: "5:37",
-        thumbnail: "https://i.ytimg.com/vi/YFYiTS46x-8/hqdefault.jpg",
-        streamUrl: "/api/stream?id=YFYiTS46x-8"
-      },
-      {
-        id: "qqE1TsV_b9c",
-        title: "New York Nagaram (Sillunu Oru Kaadhal)",
-        artist: "A.R. Rahman",
-        lang: "ta",
-        vibe: "ARR Soul",
-        duration: "6:09",
-        thumbnail: "https://i.ytimg.com/vi/qqE1TsV_b9c/hqdefault.jpg",
-        streamUrl: "/api/stream?id=qqE1TsV_b9c"
-      },
-      {
-        id: "thtAxtEuX6c",
-        title: "En Kadhal Solla (Paiyaa)",
-        artist: "Yuvan Shankar Raja",
-        lang: "ta",
-        vibe: "Yuvan Drugs",
-        duration: "4:47",
-        thumbnail: "https://i.ytimg.com/vi/thtAxtEuX6c/hqdefault.jpg",
-        streamUrl: "/api/stream?id=thtAxtEuX6c"
-      },
-      {
-        id: "GaopiK4DzOk",
-        title: "Kaadhal Valarthen (Manmadhan)",
-        artist: "Yuvan Shankar Raja",
-        lang: "ta",
-        vibe: "Yuvan Drugs",
-        duration: "5:40",
-        thumbnail: "https://i.ytimg.com/vi/GaopiK4DzOk/hqdefault.jpg",
-        streamUrl: "/api/stream?id=GaopiK4DzOk"
-      },
-      {
-        id: "JzTNs0gY_ZU",
-        title: "Venmegam (Yaaradi Nee Mohini)",
-        artist: "Yuvan Shankar Raja, Hariharan",
-        lang: "ta",
-        vibe: "Yuvan Drugs",
-        duration: "4:38",
-        thumbnail: "https://i.ytimg.com/vi/JzTNs0gY_ZU/hqdefault.jpg",
-        streamUrl: "/api/stream?id=JzTNs0gY_ZU"
-      },
-      {
-        id: "S9Jolu4ASxQ",
-        title: "Thendral Vandhu Theendumbodhu",
-        artist: "Ilaiyaraaja, S. Janaki",
-        lang: "ta",
-        vibe: "Ilaiyaraaja Vintage",
-        duration: "4:52",
-        thumbnail: "https://i.ytimg.com/vi/S9Jolu4ASxQ/hqdefault.jpg",
-        streamUrl: "/api/stream?id=S9Jolu4ASxQ"
-      },
-      {
-        id: "DgBchE35Q5w",
-        title: "Vaseegara (Minnale)",
-        artist: "Harris Jayaraj, Bombay Jayashri",
-        lang: "ta",
-        vibe: "Harris Melodies",
-        duration: "5:00",
-        thumbnail: "https://i.ytimg.com/vi/DgBchE35Q5w/hqdefault.jpg",
-        streamUrl: "/api/stream?id=DgBchE35Q5w"
-      },
-      {
-        id: "fHI8X4OXluQ",
-        title: "Blinding Lights",
-        artist: "The Weeknd",
-        lang: "en",
-        vibe: "English Billboard",
-        duration: "3:20",
-        thumbnail: "https://i.ytimg.com/vi/fHI8X4OXluQ/hqdefault.jpg",
-        streamUrl: "/api/stream?id=fHI8X4OXluQ"
-      },
-      {
-        id: "Rif-RTvmmss",
-        title: "Starboy",
-        artist: "The Weeknd, Daft Punk",
-        lang: "en",
-        vibe: "English Billboard",
-        duration: "3:50",
-        thumbnail: "https://i.ytimg.com/vi/Rif-RTvmmss/hqdefault.jpg",
-        streamUrl: "/api/stream?id=Rif-RTvmmss"
-      },
-      {
-        id: "BddP6PYo2gs",
-        title: "Kesariya (Brahmastra)",
-        artist: "Pritam, Arijit Singh",
-        lang: "hi",
-        vibe: "ARR Soul",
-        duration: "4:28",
-        thumbnail: "https://i.ytimg.com/vi/BddP6PYo2gs/hqdefault.jpg",
-        streamUrl: "/api/stream?id=BddP6PYo2gs"
-      },
-      {
-        id: "Bg8Yb9zGYyA",
-        title: "Ramuloo Ramulaa (AVPL)",
-        artist: "Thaman S, Anurag Kulkarni",
-        lang: "te",
-        vibe: "Anirudh Hype",
-        duration: "4:04",
-        thumbnail: "https://i.ytimg.com/vi/Bg8Yb9zGYyA/hqdefault.jpg",
-        streamUrl: "/api/stream?id=Bg8Yb9zGYyA"
-      }
-    ];
-
-    // SPOTIFY 6-TILE SHORTCUTS
-    const QUICK_TILES = [
-      { id: "IqwIOlhfCak", title: "Badass (Leo)", art: "https://i.ytimg.com/vi/IqwIOlhfCak/hqdefault.jpg" },
-      { id: "DsjRNPrvq6U", title: "Hukum (Jailer)", art: "https://i.ytimg.com/vi/DsjRNPrvq6U/hqdefault.jpg" },
-      { id: "VU23OPQ1Pmc", title: "Katchi Sera", art: "https://i.ytimg.com/vi/VU23OPQ1Pmc/hqdefault.jpg" },
-      { id: "g0sYCahy_vg", title: "Marakkuma Nenjam", art: "https://i.ytimg.com/vi/g0sYCahy_vg/hqdefault.jpg" },
-      { id: "thtAxtEuX6c", title: "En Kadhal Solla", art: "https://i.ytimg.com/vi/thtAxtEuX6c/hqdefault.jpg" },
-      { id: "fHI8X4OXluQ", title: "Today's Top Hits", art: "https://i.ytimg.com/vi/fHI8X4OXluQ/hqdefault.jpg" }
-    ];
-
-    // SHELF 1: MADE FOR YOU
-    const SHELF_MADE_FOR_YOU = [
-      { id: "DsjRNPrvq6U", title: "Anirudh Radio", subtitle: "Jailer, Leo, Beast, Master", art: "https://i.ytimg.com/vi/DsjRNPrvq6U/hqdefault.jpg" },
-      { id: "VU23OPQ1Pmc", title: "Tamil Pop & Indie", subtitle: "Katchi Sera, Aasa Kooda", art: "https://i.ytimg.com/vi/VU23OPQ1Pmc/hqdefault.jpg" },
-      { id: "g0sYCahy_vg", title: "A.R. Rahman Therapy", subtitle: "Pure melodies & soul healing", art: "https://i.ytimg.com/vi/g0sYCahy_vg/hqdefault.jpg" },
-      { id: "thtAxtEuX6c", title: "Yuvan Drug Radio", subtitle: "Late night strings and nostalgia", art: "https://i.ytimg.com/vi/thtAxtEuX6c/hqdefault.jpg" }
-    ];
-
-    // SHELF 2: KOLLYWOOD TOP HITS
-    const SHELF_KOLLYWOOD = [
-      { id: "IqwIOlhfCak", title: "Tamil Thunder Mix", subtitle: "Alappara, Badass, Arabic Kuthu", art: "https://i.ytimg.com/vi/IqwIOlhfCak/hqdefault.jpg" },
-      { id: "YFYiTS46x-8", title: "Gautham Menon Romance", subtitle: "VTV, VTK, Minnale classics", art: "https://i.ytimg.com/vi/YFYiTS46x-8/hqdefault.jpg" },
-      { id: "S9Jolu4ASxQ", title: "Evergreen Raaja Era", subtitle: "SPB, Janaki, Yesudas gold", art: "https://i.ytimg.com/vi/S9Jolu4ASxQ/hqdefault.jpg" },
-      { id: "DgBchE35Q5w", title: "Harris Jayaraj 2000s", subtitle: "Minnale, Kaakha Kaakha, Ghajini", art: "https://i.ytimg.com/vi/DgBchE35Q5w/hqdefault.jpg" }
-    ];
+    // Live catalog only. No tracks or runtimes are inserted without upstream metadata.
+    let CATALOG = [];
+    let QUICK_TILES = [];
+    let SHELF_MADE_FOR_YOU = [];
+    let SHELF_KOLLYWOOD = [];
 
     // ==========================================
     // UNIFIED TRACK STORE & REGISTRY
@@ -1576,13 +1352,13 @@
         ...existing,
         ...song,
         id: song.id,
-        title: song.title || existing.title || "YouTube Track",
-        artist: song.artist || existing.artist || "YouTube Artist",
+        title: song.title || existing.title || "Unknown title",
+        artist: song.artist || existing.artist || "Unknown artist",
         thumbnail: thumbnail,
         art: thumbnail,
-        duration: song.duration || existing.duration || "3:30",
-        lang: song.lang || existing.lang || "ta",
-        vibe: song.vibe || existing.vibe || "Kollywood Top Hits",
+        duration: song.duration || existing.duration || "Unknown",
+        lang: song.lang || existing.lang || "yt",
+        vibe: song.vibe || existing.vibe || "YouTube",
         streamUrl: song.streamUrl || existing.streamUrl || `/api/stream?id=${song.id}`
       };
       trackStore.set(song.id, merged);
@@ -1596,13 +1372,7 @@
       if (cat) return registerTrack(cat);
       const dl = downloadedSongs.find(s => s.id === id);
       if (dl) return registerTrack(dl);
-      return registerTrack({
-        id: id,
-        title: "YouTube Music",
-        artist: "Audio Stream",
-        thumbnail: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
-        streamUrl: `/api/stream?id=${id}`
-      });
+      return null;
     }
 
     // STATE
@@ -1617,6 +1387,55 @@
 
     let likedSongIds = new Set();
     let downloadedSongs = [];
+    const offlineBlobs = new Map();
+    const pendingDownloads = new Set();
+    let offlineDatabase;
+    const dbReady = new Promise((resolve, reject) => {
+      const req = indexedDB.open('vibestream_offline', 1);
+      req.onupgradeneeded = () => req.result.createObjectStore('tracks', { keyPath: 'id' });
+      req.onsuccess = () => { offlineDatabase = req.result; resolve(offlineDatabase); };
+      req.onerror = () => reject(req.error);
+    });
+
+    async function loadOfflineTracks() {
+      try {
+        const db = await dbReady;
+        const records = await new Promise((resolve, reject) => {
+          const request = db.transaction('tracks').objectStore('tracks').getAll();
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+        downloadedSongs = records.filter(item => item.blob?.size > 0).map(item => item.song);
+        records.forEach(item => { if (item.blob?.size > 0) offlineBlobs.set(item.id, item.blob); });
+        downloadedSongs.forEach(registerTrack);
+        renderAllViews();
+      } catch (error) {
+        showToast('Offline library unavailable in this browser', '');
+      }
+    }
+
+    async function storeOfflineTrack(song, blob) {
+      const db = await dbReady;
+      await new Promise((resolve, reject) => {
+        const transaction = db.transaction('tracks', 'readwrite');
+        transaction.objectStore('tracks').put({ id: song.id, song, blob });
+        transaction.oncomplete = resolve;
+        transaction.onerror = () => reject(transaction.error);
+        transaction.onabort = () => reject(transaction.error);
+      });
+    }
+
+    async function deleteOfflineTrack(id) {
+      const db = await dbReady;
+      await new Promise((resolve, reject) => {
+        const transaction = db.transaction('tracks', 'readwrite');
+        transaction.objectStore('tracks').delete(id);
+        transaction.oncomplete = resolve;
+        transaction.onerror = () => reject(transaction.error);
+        transaction.onabort = () => reject(transaction.error);
+      });
+    }
+
     let listeningHistory = [];
 
     // Local Storage
@@ -1625,17 +1444,10 @@
         const storedLikes = localStorage.getItem('sp_liked_ids');
         if (storedLikes) likedSongIds = new Set(JSON.parse(storedLikes));
 
-        const storedMeta = localStorage.getItem('sp_liked_tracks_meta');
-        if (storedMeta) {
-          const list = JSON.parse(storedMeta);
-          if (Array.isArray(list)) list.forEach(registerTrack);
-        }
+        // Prior cached track details may have come from a fabricated catalog.
+        // Keep favorite IDs, but display only live upstream or saved audio metadata.
 
-        const storedDown = localStorage.getItem('sp_downloaded');
-        if (storedDown) {
-          downloadedSongs = JSON.parse(storedDown);
-          if (Array.isArray(downloadedSongs)) downloadedSongs.forEach(registerTrack);
-        }
+        // Old localStorage flags held no playable bytes; intentionally ignore them.
       } catch(e) {}
       updateLikedCount();
     }
@@ -1647,10 +1459,6 @@
         localStorage.setItem('sp_liked_tracks_meta', JSON.stringify(likedMeta));
       } catch(e) {}
       updateLikedCount();
-    }
-
-    function saveDownloads() {
-      try { localStorage.setItem('sp_downloaded', JSON.stringify(downloadedSongs)); } catch(e) {}
     }
 
     function updateLikedCount() {
@@ -1682,7 +1490,7 @@
 
     // RECOMMENDATION ENGINE (MARKOV VIBE & QUEUE AUTO-ADVANCE)
     function computeNextSong(current) {
-      if (!current) return CATALOG[0];
+      if (!current) return null;
 
       // 1. If currently playing an active search queue or playlist
       if (activeQueue && activeQueue.length > 1) {
@@ -1695,7 +1503,7 @@
 
       // 2. Candidate pool from all known tracks
       let pool = Array.from(trackStore.values()).filter(s => s.id !== current.id);
-      if (pool.length < 5) pool = CATALOG.filter(s => s.id !== current.id);
+      if (!pool.length) return null;
 
       // Score candidates
       pool.sort((a, b) => {
@@ -1728,23 +1536,15 @@
         return scoreB - scoreA;
       });
 
-      return pool[0] || CATALOG[0];
+      return pool[0] || null;
     }
 
     // ==========================================
     // AUDIO PLAYBACK PIPELINE
     // ==========================================
     function playTrack(id, queueContext = null) {
-      let song = getTrack(id);
-      if (!song) {
-        song = registerTrack({
-          id: id,
-          title: "YouTube Track",
-          artist: "YouTube Stream",
-          thumbnail: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
-          streamUrl: `/api/stream?id=${id}`
-        });
-      }
+      const song = getTrack(id);
+      if (!song) { showToast('Track metadata unavailable', ''); return; }
 
       currentTrack = song;
       listeningHistory.unshift(song.id);
@@ -1759,12 +1559,16 @@
       updatePlayerUI();
       showToast(`Loading: ${song.title.slice(0, 24)}…`, "🎵");
 
-      const streamEndpoint = song.streamUrl || `/api/stream?id=${song.id}`;
-      
+      const previousUrl = audio.src;
+      const streamEndpoint = offlineBlobs.has(song.id)
+        ? URL.createObjectURL(offlineBlobs.get(song.id))
+        : (song.streamUrl || `/api/stream?id=${song.id}`);
+
       // Update audio engine
       if (audio.src !== streamEndpoint && !audio.src.endsWith(streamEndpoint)) {
         audio.src = streamEndpoint;
         audio.load();
+        if (previousUrl.startsWith('blob:')) URL.revokeObjectURL(previousUrl);
       }
 
       const playPromise = audio.play();
@@ -1809,7 +1613,7 @@
       else if (code === 2) errStr = "Network connection failed";
       else if (code === 3) errStr = "Audio decode failed";
       else if (code === 4) errStr = "Format not supported";
-      showToast(`${errStr} - retrying…`, "⚠️");
+      showToast(errStr, "⚠️");
     };
 
     audio.onended = () => {
@@ -1826,7 +1630,7 @@
         showToast(`Next: ${nextTrack.title.slice(0, 22)}…`, "⚡");
         playTrack(nextTrack.id);
       } else {
-        playTrack(CATALOG[0].id);
+        audio.pause();
       }
     }
 
@@ -1840,7 +1644,8 @@
 
     function togglePlay() {
       if (!currentTrack) {
-        playTrack(CATALOG[0].id);
+        if (CATALOG.length) playTrack(CATALOG[0].id);
+        else showToast('Search for a song first', '');
         return;
       }
       if (audio.paused) {
@@ -1976,51 +1781,85 @@
     // ==========================================
     // DOWNLOAD PIPELINE
     // ==========================================
-    function triggerDownload(id) {
-      const song = getTrack(id);
-      if (!song) return;
-
-      showToast(`Downloading "${song.title.slice(0, 18)}…"`, "⏳");
-
-      // Real download from server
-      const a = document.createElement('a');
-      a.href = `/api/download?id=${song.id}`;
-      a.download = `${song.title.replace(/[^a-zA-Z0-9_\-\s]/g, '')}.m4a`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-
-      if (!downloadedSongs.some(s => s.id === song.id)) {
-        downloadedSongs.unshift({ ...song, isDownloaded: true });
-        saveDownloads();
+    async function verifyPlayableAudio(blob) {
+      const url = URL.createObjectURL(blob);
+      const probe = document.createElement('audio');
+      probe.preload = 'metadata';
+      try {
+        await new Promise((resolve, reject) => {
+          const timer = setTimeout(() => reject(new Error('Audio verification timed out')), 12000);
+          probe.onloadedmetadata = () => { clearTimeout(timer); resolve(); };
+          probe.onerror = () => { clearTimeout(timer); reject(new Error('Audio could not be decoded')); };
+          probe.src = url;
+          probe.load();
+        });
+      } finally {
+        probe.removeAttribute('src');
+        probe.load();
+        URL.revokeObjectURL(url);
       }
+    }
 
-      showToast("Saved offline!", "💾");
-      renderAllViews();
+    async function triggerDownload(id) {
+      const song = getTrack(id);
+      if (!song || offlineBlobs.has(id)) return;
+      if (pendingDownloads.has(id)) return;
+      pendingDownloads.add(id);
+      showToast(`Downloading "${song.title.slice(0, 18)}"…`, '');
+      try {
+        const response = await fetch(`/api/download?id=${encodeURIComponent(id)}`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const type = (response.headers.get('content-type') || '').split(';')[0].toLowerCase();
+        if (!['audio/mp4', 'audio/webm', 'audio/ogg', 'audio/mpeg'].includes(type))
+          throw new Error(`Unknown audio format: ${type || 'none'}`);
+        const expected = Number(response.headers.get('content-length'));
+        const blob = await response.blob();
+        if (!blob.size || (response.headers.has('content-length') && blob.size !== expected))
+          throw new Error('Incomplete download');
+        await verifyPlayableAudio(blob);
+        await storeOfflineTrack(song, blob);
+        offlineBlobs.set(id, blob);
+        downloadedSongs.unshift(song);
+        showToast('Saved offline', '');
+        renderAllViews();
+      } catch (error) {
+        showToast(`Not saved: ${error.message}`, '');
+      } finally {
+        pendingDownloads.delete(id);
+      }
     }
 
     function downloadCurrentSong() {
       if (currentTrack) triggerDownload(currentTrack.id);
     }
 
-    function removeDownloaded(id) {
-      downloadedSongs = downloadedSongs.filter(s => s.id !== id);
-      saveDownloads();
-      showToast("Removed from local storage", "🗑️");
-      renderAllViews();
+    async function removeDownloaded(id) {
+      try {
+        await deleteOfflineTrack(id);
+        offlineBlobs.delete(id);
+        downloadedSongs = downloadedSongs.filter(s => s.id !== id);
+        showToast('Removed from offline library', '');
+        renderAllViews();
+      } catch (error) {
+        showToast(`Could not remove download: ${error.message}`, '');
+      }
     }
 
     // ==========================================
     // RENDER VIEWS
     // ==========================================
     const FALLBACK_ART = "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=300";
+    function safeImageUrl(url) {
+      try { const parsed = new URL(url, location.href); return ['http:', 'https:'].includes(parsed.protocol) ? escapeHtml(parsed.href) : FALLBACK_ART; }
+      catch (_) { return FALLBACK_ART; }
+    }
 
     function renderQuickTiles() {
       const grid = document.getElementById('quickTiles');
       grid.innerHTML = QUICK_TILES.map(t => `
         <div class="quick-tile" onclick="playTrack('${t.id}')">
-          <img src="${t.art}" class="quick-tile-img" alt="" onerror="this.onerror=null; this.src='${FALLBACK_ART}';">
-          <span class="quick-tile-title">${t.title}</span>
+          <img src="${safeImageUrl(t.art)}" class="quick-tile-img" alt="" onerror="this.onerror=null; this.src='${FALLBACK_ART}';">
+          <span class="quick-tile-title">${escapeHtml(t.title)}</span>
           <div class="quick-tile-play">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="#000"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
           </div>
@@ -2033,13 +1872,13 @@
       el.innerHTML = items.map(item => `
         <div class="album-card" onclick="playTrack('${item.id}')">
           <div class="album-art-wrap">
-            <img src="${item.art}" class="album-art-img" alt="" onerror="this.onerror=null; this.src='${FALLBACK_ART}';">
+            <img src="${safeImageUrl(item.art)}" class="album-art-img" alt="" onerror="this.onerror=null; this.src='${FALLBACK_ART}';">
             <div class="album-play-fab">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="#000"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
             </div>
           </div>
-          <div class="album-title">${item.title}</div>
-          <div class="album-subtitle">${item.subtitle}</div>
+          <div class="album-title">${escapeHtml(item.title)}</div>
+          <div class="album-subtitle">${escapeHtml(item.subtitle)}</div>
         </div>
       `).join('');
     }
@@ -2048,11 +1887,11 @@
       registerTrack(song);
       const isCur = currentTrack && currentTrack.id === song.id;
       const liked = isLiked(song.id);
-      const downloaded = downloadedSongs.some(d => d.id === song.id);
+      const downloaded = offlineBlobs.has(song.id);
 
       return `
         <div class="track-row ${isCur ? 'playing' : ''}" onclick="playTrack('${song.id}')">
-          <img src="${song.thumbnail || FALLBACK_ART}" class="track-row-art" alt="" loading="lazy" onerror="this.onerror=null; this.src='${FALLBACK_ART}';">
+          <img src="${safeImageUrl(song.thumbnail)}" class="track-row-art" alt="" loading="lazy" onerror="this.onerror=null; this.src='${FALLBACK_ART}';">
           <div class="track-row-info">
             <div class="track-row-title">${escapeHtml(song.title)}</div>
             <div class="track-row-meta">
@@ -2063,8 +1902,8 @@
                   <div class="row-soundbar"></div>
                 </div>
               ` : ''}
-              <span class="track-tag-pill ${song.lang || 'ta'}">${(song.lang || 'YT').toUpperCase()}</span>
-              <span>${escapeHtml(song.artist)} • ${song.duration}</span>
+              <span class="track-tag-pill">YT</span>
+              <span>${escapeHtml(song.artist)} • ${escapeHtml(song.duration || 'Unknown')}</span>
             </div>
           </div>
           <div class="track-row-actions">
@@ -2085,11 +1924,11 @@
 
     function renderHomeTracks() {
       let filtered = [...CATALOG];
-      if (currentCategory === 'tamil') filtered = filtered.filter(s => s.lang === 'ta');
+      if (currentCategory === 'tamil') filtered = filtered.filter(s => /tamil/i.test(`${s.title} ${s.artist}`));
       else if (currentCategory === 'anirudh') filtered = filtered.filter(s => s.artist.includes('Anirudh'));
       else if (currentCategory === 'arr') filtered = filtered.filter(s => s.artist.includes('Rahman'));
       else if (currentCategory === 'yuvan') filtered = filtered.filter(s => s.artist.includes('Yuvan'));
-      else if (currentCategory === 'english') filtered = filtered.filter(s => s.lang === 'en');
+      else if (currentCategory === 'english') filtered = filtered.filter(s => /english/i.test(`${s.title} ${s.artist}`));
 
       document.getElementById('homeTracksList').innerHTML = filtered.map(renderTrackRow).join('');
     }
@@ -2158,23 +1997,21 @@
 
       try {
         const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const results = await res.json();
-        if (results && results.length > 0) {
-          results.forEach(registerTrack);
-          activeQueue = results;
-          document.getElementById('searchQueryLabel').textContent = `Top Results for "${q}" (${results.length} songs)`;
-          list.innerHTML = results.map(renderTrackRow).join('');
-          return;
+        if (Array.isArray(results) && results.length > 0) {
+          const valid = results.filter(s => /^[A-Za-z0-9_-]{11}$/.test(s.id) && s.title);
+          valid.forEach(registerTrack);
+          activeQueue = valid;
+          document.getElementById('searchQueryLabel').textContent = `Top Results for "${q}" (${valid.length} songs)`;
+          if (valid.length) { list.innerHTML = valid.map(renderTrackRow).join(''); return; }
         }
       } catch(e) {
         console.warn("Search fetch error:", e);
       }
 
-      // Fallback local search
-      const matches = CATALOG.filter(s => s.title.toLowerCase().includes(q.toLowerCase()) || s.artist.toLowerCase().includes(q.toLowerCase()));
-      matches.forEach(registerTrack);
-      activeQueue = matches;
-      list.innerHTML = matches.length ? matches.map(renderTrackRow).join('') : `<div style="padding:20px; text-align:center; color:#777;">No matches found for "${escapeHtml(q)}".</div>`;
+      activeQueue = [];
+      list.innerHTML = `<div style="padding:20px; text-align:center; color:#777;">No live results for "${escapeHtml(q)}". Try again later.</div>`;
     }
 
     let suggestionDebounceTimer = null;
@@ -2320,16 +2157,26 @@
     // INIT
     // ==========================================
     loadSavedData();
-    CATALOG.forEach(registerTrack);
-    QUICK_TILES.forEach(t => registerTrack({ id: t.id, title: t.title, thumbnail: t.art }));
-    SHELF_MADE_FOR_YOU.forEach(t => registerTrack({ id: t.id, title: t.title, artist: t.subtitle, thumbnail: t.art }));
-    SHELF_KOLLYWOOD.forEach(t => registerTrack({ id: t.id, title: t.title, artist: t.subtitle, thumbnail: t.art }));
-
-    renderQuickTiles();
-    renderShelf(SHELF_MADE_FOR_YOU, 'shelfMadeForYou');
-    renderShelf(SHELF_KOLLYWOOD, 'shelfKollywood');
-    renderHomeTracks();
-    renderLibraryTracks();
+    loadOfflineTracks();
+    (async () => {
+      try {
+        const response = await fetch('/api/search?q=Tamil%20music');
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const results = await response.json();
+        if (!Array.isArray(results)) throw new Error('Invalid search response');
+        CATALOG = results.filter(s => /^[A-Za-z0-9_-]{11}$/.test(s.id) && s.title);
+        CATALOG.forEach(registerTrack);
+        QUICK_TILES = CATALOG.slice(0, 6).map(s => ({ id: s.id, title: s.title, art: s.thumbnail }));
+        SHELF_MADE_FOR_YOU = CATALOG.slice(0, 4).map(s => ({ id: s.id, title: s.title, subtitle: s.artist, art: s.thumbnail }));
+        SHELF_KOLLYWOOD = CATALOG.slice(4, 8).map(s => ({ id: s.id, title: s.title, subtitle: s.artist, art: s.thumbnail }));
+        renderQuickTiles();
+        renderShelf(SHELF_MADE_FOR_YOU, 'shelfMadeForYou');
+        renderShelf(SHELF_KOLLYWOOD, 'shelfKollywood');
+        renderAllViews();
+      } catch (error) {
+        document.getElementById('homeTracksList').textContent = 'Live music search unavailable. Search again later.';
+      }
+    })();
   </script>
 </body>
 </html>
