@@ -238,7 +238,15 @@ class YouTubeExtractor {
      * Resolves the direct audio stream URL on-device for streaming or downloading.
      * Selects the highest quality M4A or Opus audio stream.
      */
-    suspend fun resolveAudioStream(videoId: String): String? = withContext(Dispatchers.IO) {
+    suspend fun resolveAudioStream(videoId: String): String? =
+        resolveAudioCandidates(videoId).firstOrNull()
+
+    /**
+     * Returns playable audio URLs, best first (m4a before webm, then bitrate), so the player
+     * can fall back to the next one if a URL is rejected.
+     */
+    suspend fun resolveAudioCandidates(videoId: String): List<String> = withContext(Dispatchers.IO) {
+        lastResolveError = null
         try {
             NewPipeBootstrap.ensureInit(client)
             val info = org.schabi.newpipe.extractor.stream.StreamInfo.getInfo(
@@ -248,17 +256,22 @@ class YouTubeExtractor {
                 it.deliveryMethod == org.schabi.newpipe.extractor.stream.DeliveryMethod.PROGRESSIVE_HTTP &&
                     it.isUrl && !it.content.isNullOrEmpty()
             }
-            // Prefer m4a (best ExoPlayer compatibility), then highest bitrate.
-            val best = progressive.sortedWith(
+            val sorted = progressive.sortedWith(
                 compareByDescending<org.schabi.newpipe.extractor.stream.AudioStream> {
                     it.format == org.schabi.newpipe.extractor.MediaFormat.M4A
                 }.thenByDescending { it.averageBitrate }
-            ).firstOrNull()
-            best?.content
-        } catch (e: Exception) {
-            null
+            ).map { it.content }
+            if (sorted.isEmpty()) {
+                lastResolveError = "no progressive audio streams (of ${info.audioStreams.size} total)"
+            }
+            sorted
+        } catch (e: Throwable) {
+            lastResolveError = "${e.javaClass.simpleName}: ${e.message}".take(160)
+            emptyList()
         }
     }
+
+    @Volatile var lastResolveError: String? = null
 
     /**
      * Real-time search recommendations / autocomplete queries directly from YouTube.

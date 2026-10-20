@@ -110,9 +110,22 @@ class MusicPlayerController(
             }
 
             override fun onPlayerError(error: PlaybackException) {
+                val next = pendingCandidates.removeFirstOrNull()
+                val song = _currentSong.value
+                if (next != null && song != null) {
+                    lastPlayError = describe(error)
+                    playerScope.launch {
+                        controller?.let { c ->
+                            c.setMediaItem(buildItem(song, Uri.parse(next)))
+                            c.prepare()
+                            c.play()
+                        }
+                    }
+                    return
+                }
                 _isBuffering.value = false
                 _isPlaying.value = false
-                _errorMessage.value = "Playback error: ${error.localizedMessage}"
+                _errorMessage.value = "Playback error: ${error.localizedMessage}\n${describe(error)}"
             }
         }
 
@@ -156,6 +169,29 @@ class MusicPlayerController(
      * - If already downloaded, plays directly from device storage (file://).
      * - If not downloaded, resolves direct audio stream URL and streams instantly.
      */
+    private val pendingCandidates = ArrayDeque<String>()
+    private var lastPlayError: String = ""
+
+    private fun describe(e: PlaybackException): String {
+        var c: Throwable? = e.cause
+        val parts = mutableListOf(e.errorCodeName)
+        while (c != null) {
+            val code = (c as? androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException)?.responseCode
+            parts.add(if (code != null) "HTTP $code" else "${c.javaClass.simpleName}: ${c.message}")
+            c = c.cause
+        }
+        return parts.joinToString(" | ").take(220)
+    }
+
+    private fun buildItem(song: Song, uri: Uri): MediaItem {
+        val metadata = MediaMetadata.Builder()
+            .setTitle(song.title)
+            .setArtist(song.artist)
+            .setArtworkUri(if (song.thumbnailUrl.isNotEmpty()) Uri.parse(song.thumbnailUrl) else null)
+            .build()
+        return MediaItem.Builder().setUri(uri).setMediaId(song.id).setMediaMetadata(metadata).build()
+    }
+
     fun playSong(song: Song) {
         playerScope.launch {
             _errorMessage.value = null
@@ -172,13 +208,14 @@ class MusicPlayerController(
                 }
                 // Resolve stream on-the-fly from YouTube
                 else -> {
-                    val resolved = extractor.resolveAudioStream(song.id)
-                    if (resolved != null) {
-                        song.streamUrl = resolved
-                        Uri.parse(resolved)
+                    val all = extractor.resolveAudioCandidates(song.id)
+                    pendingCandidates.clear()
+                    if (all.isNotEmpty()) {
+                        pendingCandidates.addAll(all.drop(1).take(4))
+                        Uri.parse(all[0])
                     } else {
                         _isBuffering.value = false
-                        _errorMessage.value = "Unable to fetch audio stream for this track."
+                        _errorMessage.value = "Unable to fetch audio stream: ${extractor.lastResolveError ?: "unknown"}"
                         return@launch
                     }
                 }
@@ -190,17 +227,7 @@ class MusicPlayerController(
                     _errorMessage.value = "Playback service unavailable: ${e.localizedMessage}"
                     return@launch
                 }
-                val metadata = MediaMetadata.Builder()
-                    .setTitle(song.title)
-                    .setArtist(song.artist)
-                    .setArtworkUri(if (song.thumbnailUrl.isNotEmpty()) Uri.parse(song.thumbnailUrl) else null)
-                    .build()
-
-                val mediaItem = MediaItem.Builder()
-                    .setUri(playableUri)
-                    .setMediaId(song.id)
-                    .setMediaMetadata(metadata)
-                    .build()
+                val mediaItem = buildItem(song, playableUri)
 
                 _currentSong.value = song
                 player.setMediaItem(mediaItem)
