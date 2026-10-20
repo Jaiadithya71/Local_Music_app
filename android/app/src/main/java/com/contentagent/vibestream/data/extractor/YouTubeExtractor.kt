@@ -7,7 +7,9 @@ import com.google.gson.JsonParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
 
 /**
@@ -35,6 +37,86 @@ class YouTubeExtractor {
      * Searches YouTube for music tracks matching the given query.
      */
     suspend fun searchSongs(query: String): List<Song> = withContext(Dispatchers.IO) {
+        val direct = searchYouTubeMusic(query)
+        if (direct.isNotEmpty()) return@withContext direct
+        searchViaMirrors(query)
+    }
+
+    /**
+     * Primary search: YouTube Music's own search endpoint (songs filter).
+     * Public Piped mirrors are frequently down, so this does not depend on them.
+     */
+    private fun searchYouTubeMusic(query: String): List<Song> {
+        if (query.isBlank()) return emptyList()
+        return try {
+            val payload = JsonObject().apply {
+                add("context", JsonObject().apply {
+                    add("client", JsonObject().apply {
+                        addProperty("clientName", "WEB_REMIX")
+                        addProperty("clientVersion", "1.20241016.01.00")
+                        addProperty("hl", "en")
+                        addProperty("gl", "IN")
+                    })
+                })
+                addProperty("query", query.trim())
+                addProperty("params", "EgWKAQIIAWoKEAkQBRAKEAMQBA==")
+            }
+            val request = Request.Builder()
+                .url("https://music.youtube.com/youtubei/v1/search?prettyPrint=false")
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                .header("Origin", "https://music.youtube.com")
+                .post(payload.toString().toRequestBody("application/json".toMediaType()))
+                .build()
+            val body = client.newCall(request).execute().use { r ->
+                if (r.isSuccessful) r.body?.string() else null
+            } ?: return emptyList()
+            val out = mutableListOf<Song>()
+            collectSongs(JsonParser.parseString(body), out)
+            out.distinctBy { it.id }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun collectSongs(el: com.google.gson.JsonElement, out: MutableList<Song>) {
+        if (el.isJsonObject) {
+            val o = el.asJsonObject
+            val r = o.getAsJsonObject("musicResponsiveListItemRenderer")
+            if (r != null) {
+                parseMusicItem(r)?.let { out.add(it) }
+            } else {
+                for (e in o.entrySet()) collectSongs(e.value, out)
+            }
+        } else if (el.isJsonArray) {
+            for (e in el.asJsonArray) collectSongs(e, out)
+        }
+    }
+
+    private fun parseMusicItem(r: JsonObject): Song? {
+        val id = r.getAsJsonObject("playlistItemData")?.get("videoId")?.asString ?: return null
+        val cols = r.getAsJsonArray("flexColumns") ?: return null
+        val texts = mutableListOf<List<String>>()
+        for (c in cols) {
+            val runs = c.asJsonObject.getAsJsonObject("musicResponsiveListItemFlexColumnRenderer")
+                ?.getAsJsonObject("text")?.getAsJsonArray("runs")
+            texts.add(runs?.mapNotNull { it.asJsonObject.get("text")?.asString } ?: emptyList())
+        }
+        val title = texts.getOrNull(0)?.firstOrNull() ?: return null
+        val sub = texts.getOrNull(1) ?: emptyList()
+        val artist = sub.firstOrNull { it.isNotBlank() && it.trim() != "•" } ?: "Unknown Artist"
+        val durText = sub.lastOrNull { Regex("^\\d+(:\\d{2}){1,2}$").matches(it.trim()) }?.trim()
+        val dur = durText?.split(":")?.fold(0L) { acc, p -> acc * 60 + p.toLong() } ?: 0L
+        return Song(
+            id = id,
+            title = title,
+            artist = artist,
+            durationSec = dur,
+            durationText = formatDuration(dur),
+            thumbnailUrl = "https://i.ytimg.com/vi/$id/hqdefault.jpg"
+        )
+    }
+
+    private suspend fun searchViaMirrors(query: String): List<Song> = withContext(Dispatchers.IO) {
         val encodedQuery = java.net.URLEncoder.encode(query, "UTF-8")
         val results = mutableListOf<Song>()
 
