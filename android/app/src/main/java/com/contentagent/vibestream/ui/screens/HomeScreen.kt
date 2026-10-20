@@ -45,7 +45,7 @@ fun HomeScreen(
     val coroutineScope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
 
-    var selectedTab by remember { mutableStateOf(0) } // 0 = Discover, 1 = Downloads
+    var selectedTab by remember { mutableStateOf(0) } // 0 = Home, 1 = Find, 2 = Library
     var searchQuery by remember { mutableStateOf("") }
     var isSearching by remember { mutableStateOf(false) }
     var searchResults by remember { mutableStateOf<List<Song>>(emptyList()) }
@@ -122,6 +122,7 @@ fun HomeScreen(
     Scaffold(
         containerColor = DarkBackground,
         bottomBar = {
+          Column {
             if (currentSong != null) {
                 MiniPlayer(
                     song = currentSong!!,
@@ -133,6 +134,29 @@ fun HomeScreen(
                     onClick = { isPlayerSheetVisible = true }
                 )
             }
+            NavigationBar(containerColor = DarkSurface) {
+                val items = listOf(
+                    Triple("Home", Icons.Default.Home, 0),
+                    Triple("Find", Icons.Default.Search, 1),
+                    Triple("Library", Icons.Default.LibraryMusic, 2)
+                )
+                for ((label, icon, idx) in items) {
+                    NavigationBarItem(
+                        selected = selectedTab == idx,
+                        onClick = { selectedTab = idx },
+                        icon = { Icon(icon, contentDescription = label) },
+                        label = { Text(if (idx == 2) "Library (${downloadedSongs.size})" else label, fontSize = 11.sp) },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = DarkBackground,
+                            selectedTextColor = AmberOrange,
+                            indicatorColor = AmberOrange,
+                            unselectedIconColor = TextSecondary,
+                            unselectedTextColor = TextSecondary
+                        )
+                    )
+                }
+            }
+          }
         }
     ) { innerPadding ->
         Column(
@@ -189,42 +213,8 @@ fun HomeScreen(
                 }
             }
 
-            // Tab Switcher: Discover vs Downloads
-            TabRow(
-                selectedTabIndex = selectedTab,
-                containerColor = DarkBackground,
-                contentColor = AmberOrange,
-                divider = {
-                    Divider(color = DarkSurfaceBorder)
-                }
-            ) {
-                Tab(
-                    selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
-                    text = {
-                        Text(
-                            text = "Discover & Stream",
-                            fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal,
-                            fontSize = 14.sp
-                        )
-                    },
-                    icon = { Icon(Icons.Default.TravelExplore, contentDescription = null) }
-                )
-                Tab(
-                    selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
-                    text = {
-                        Text(
-                            text = "Downloads (${downloadedSongs.size})",
-                            fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal,
-                            fontSize = 14.sp
-                        )
-                    },
-                    icon = { Icon(Icons.Default.DownloadDone, contentDescription = null) }
-                )
-            }
 
-            if (selectedTab == 0) {
+            if (selectedTab == 1) {
                 // DISCOVER TAB
                 Column(modifier = Modifier.fillMaxSize()) {
                     // Search Bar
@@ -459,7 +449,7 @@ fun HomeScreen(
                         }
                     }
                 }
-            } else {
+            } else if (selectedTab == 2) {
                 // DOWNLOADS / OFFLINE TAB
                 Column(modifier = Modifier.fillMaxSize()) {
                     if (downloadedSongs.isEmpty()) {
@@ -540,6 +530,13 @@ fun HomeScreen(
                         }
                     }
                 }
+            } else {
+                HomeShelves(
+                    extractor = extractor,
+                    currentSongId = currentSong?.id,
+                    onPlay = { playerController.playSong(it) },
+                    onSeeAll = { q -> selectedTab = 1; searchQuery = q; performSearch(q) }
+                )
             }
         }
     }
