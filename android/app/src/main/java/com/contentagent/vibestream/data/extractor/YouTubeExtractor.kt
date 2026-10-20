@@ -37,8 +37,12 @@ class YouTubeExtractor {
      * Searches YouTube for music tracks matching the given query.
      */
     suspend fun searchSongs(query: String): List<Song> = withContext(Dispatchers.IO) {
-        val direct = searchYouTubeMusic(query)
-        if (direct.isNotEmpty()) return@withContext direct
+        // Same results as the YouTube app first (compilations, long mixes, channels),
+        // then YouTube Music songs not already listed.
+        val web = searchYouTubeWeb(query)
+        val songs = searchYouTubeMusic(query)
+        val merged = (web + songs).distinctBy { it.id }
+        if (merged.isNotEmpty()) return@withContext merged
         searchViaMirrors(query)
     }
 
@@ -75,6 +79,68 @@ class YouTubeExtractor {
             out.distinctBy { it.id }
         } catch (e: Exception) {
             emptyList()
+        }
+    }
+
+    /** Plain YouTube search (what the YouTube app shows). */
+    private fun searchYouTubeWeb(query: String): List<Song> {
+        if (query.isBlank()) return emptyList()
+        return try {
+            val payload = JsonObject().apply {
+                add("context", JsonObject().apply {
+                    add("client", JsonObject().apply {
+                        addProperty("clientName", "WEB")
+                        addProperty("clientVersion", "2.20241017.01.00")
+                        addProperty("hl", "en")
+                        addProperty("gl", "IN")
+                    })
+                })
+                addProperty("query", query.trim())
+            }
+            val request = Request.Builder()
+                .url("https://www.youtube.com/youtubei/v1/search?prettyPrint=false")
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                .post(payload.toString().toRequestBody("application/json".toMediaType()))
+                .build()
+            val body = client.newCall(request).execute().use { r ->
+                if (r.isSuccessful) r.body?.string() else null
+            } ?: return emptyList()
+            val out = mutableListOf<Song>()
+            collectVideos(JsonParser.parseString(body), out)
+            out
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun collectVideos(el: com.google.gson.JsonElement, out: MutableList<Song>) {
+        if (el.isJsonObject) {
+            val o = el.asJsonObject
+            val v = o.getAsJsonObject("videoRenderer")
+            if (v != null) {
+                val id = v.get("videoId")?.asString
+                val title = v.getAsJsonObject("title")?.getAsJsonArray("runs")
+                    ?.joinToString("") { it.asJsonObject.get("text")?.asString ?: "" }
+                if (id != null && !title.isNullOrBlank()) {
+                    val artist = v.getAsJsonObject("ownerText")?.getAsJsonArray("runs")
+                        ?.firstOrNull()?.asJsonObject?.get("text")?.asString ?: "YouTube"
+                    val durText = v.getAsJsonObject("lengthText")?.get("simpleText")?.asString
+                    val dur = try {
+                        durText?.split(":")?.fold(0L) { acc, p -> acc * 60 + p.toLong() } ?: 0L
+                    } catch (e: Exception) { 0L }
+                    out.add(
+                        Song(
+                            id = id, title = title, artist = artist,
+                            durationSec = dur, durationText = formatDuration(dur),
+                            thumbnailUrl = "https://i.ytimg.com/vi/$id/hqdefault.jpg"
+                        )
+                    )
+                }
+            } else {
+                for (e in o.entrySet()) collectVideos(e.value, out)
+            }
+        } else if (el.isJsonArray) {
+            for (e in el.asJsonArray) collectVideos(e, out)
         }
     }
 
@@ -318,8 +384,10 @@ class YouTubeExtractor {
 
     private fun formatDuration(seconds: Long): String {
         if (seconds <= 0) return "Unknown"
-        val minutes = seconds / 60
-        val remainingSec = seconds % 60
-        return "$minutes:${remainingSec.toString().padStart(2, '0')}"
+        val h = seconds / 3600
+        val m = (seconds % 3600) / 60
+        val sec = seconds % 60
+        return if (h > 0) "$h:${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}"
+        else "$m:${sec.toString().padStart(2, '0')}"
     }
 }
