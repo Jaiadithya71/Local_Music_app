@@ -239,47 +239,25 @@ class YouTubeExtractor {
      * Selects the highest quality M4A or Opus audio stream.
      */
     suspend fun resolveAudioStream(videoId: String): String? = withContext(Dispatchers.IO) {
-        for (baseMirror in apiMirrors) {
-            try {
-                val url = "$baseMirror/streams/$videoId"
-                val request = Request.Builder()
-                    .url(url)
-                    .header("User-Agent", "Mozilla/5.0 (Android; Mobile)")
-                    .build()
-
-                client.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) return@use
-
-                    val body = response.body?.string() ?: return@use
-                    val obj = JsonParser.parseString(body).asJsonObject
-
-                    if (obj.has("audioStreams")) {
-                        val audioStreams = obj.getAsJsonArray("audioStreams")
-                        var bestUrl: String? = null
-                        var highestBitrate = 0L
-
-                        for (streamItem in audioStreams) {
-                            val streamObj = streamItem.asJsonObject
-                            val streamUrl = streamObj.get("url")?.asString ?: continue
-                            val bitrate = streamObj.get("bitrate")?.asLong ?: 0L
-
-                            // Prioritize high-bitrate m4a/opus
-                            if (bitrate >= highestBitrate) {
-                                highestBitrate = bitrate
-                                bestUrl = streamUrl
-                            }
-                        }
-
-                        if (!bestUrl.isNullOrEmpty()) {
-                            return@withContext bestUrl
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                continue
+        try {
+            NewPipeBootstrap.ensureInit(client)
+            val info = org.schabi.newpipe.extractor.stream.StreamInfo.getInfo(
+                "https://www.youtube.com/watch?v=$videoId"
+            )
+            val progressive = info.audioStreams.filter {
+                it.deliveryMethod == org.schabi.newpipe.extractor.stream.DeliveryMethod.PROGRESSIVE_HTTP &&
+                    it.isUrl && !it.content.isNullOrEmpty()
             }
+            // Prefer m4a (best ExoPlayer compatibility), then highest bitrate.
+            val best = progressive.sortedWith(
+                compareByDescending<org.schabi.newpipe.extractor.stream.AudioStream> {
+                    it.format == org.schabi.newpipe.extractor.MediaFormat.M4A
+                }.thenByDescending { it.averageBitrate }
+            ).firstOrNull()
+            best?.content
+        } catch (e: Exception) {
+            null
         }
-        return@withContext null
     }
 
     /**
