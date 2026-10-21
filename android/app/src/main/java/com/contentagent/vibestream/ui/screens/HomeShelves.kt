@@ -34,9 +34,25 @@ private val shelves = listOf(
 private object ShelfCache {
     val data = mutableStateMapOf<String, List<Song>>()
     val failed = mutableStateMapOf<String, Boolean>()
+    var restored = false
 }
 
-private suspend fun loadShelf(extractor: YouTubeExtractor, query: String) {
+private fun shelfPrefs(ctx: android.content.Context) =
+    ctx.getSharedPreferences("vibestream_shelves", android.content.Context.MODE_PRIVATE)
+
+private fun restoreShelves(ctx: android.content.Context, queries: List<String>) {
+    val gson = com.google.gson.Gson()
+    val type = object : com.google.gson.reflect.TypeToken<List<Song>>() {}.type
+    for (q in queries) {
+        if (ShelfCache.data[q] != null) continue
+        val json = shelfPrefs(ctx).getString(q, null) ?: continue
+        val list: List<Song>? = try { gson.fromJson(json, type) } catch (e: Exception) { null }
+        if (!list.isNullOrEmpty()) ShelfCache.data[q] = list
+    }
+}
+
+/** Fetches a shelf, keeps showing cached songs if the refresh fails. */
+private suspend fun loadShelf(ctx: android.content.Context, extractor: YouTubeExtractor, query: String) {
     ShelfCache.failed.remove(query)
     var result: List<Song> = emptyList()
     for (attempt in 1..2) {
@@ -45,7 +61,13 @@ private suspend fun loadShelf(extractor: YouTubeExtractor, query: String) {
         } catch (e: Exception) { emptyList() }
         if (result.isNotEmpty()) break
     }
-    if (result.isNotEmpty()) ShelfCache.data[query] = result.take(12) else ShelfCache.failed[query] = true
+    if (result.isNotEmpty()) {
+        val clean = result.take(12).map { it.copy(streamUrl = null) }
+        ShelfCache.data[query] = clean
+        shelfPrefs(ctx).edit().putString(query, com.google.gson.Gson().toJson(clean)).apply()
+    } else if (ShelfCache.data[query] == null) {
+        ShelfCache.failed[query] = true
+    }
 }
 
 /** Amazon Music style Home: titled horizontal shelves of square cards. */
@@ -55,14 +77,23 @@ fun HomeShelves(
     currentSongId: String?,
     onPlay: (Song, List<Song>) -> Unit,
     onSeeAll: (String) -> Unit,
-    recent: List<Song> = emptyList()
+    recent: List<Song> = emptyList(),
+    liked: List<Song> = emptyList()
 ) {
     val scope = rememberCoroutineScope()
-    // Load shelves one at a time so they do not fail together under load.
-    LaunchedEffect(Unit) {
-        for ((_, q) in shelves) {
-            if (ShelfCache.data[q] == null) loadShelf(extractor, q)
-        }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    // Top picks follow what he plays and likes: most frequent artist across liked + recent.
+    val topArtist = (liked + recent).groupingBy { it.artist }.eachCount()
+        .filterKeys { it.isNotBlank() && it != "Unknown Artist" && it != "YouTube" }
+        .maxByOrNull { it.value }?.key
+    val shelfList = remember(topArtist) {
+        val first = if (topArtist != null) "Top picks for you" to "$topArtist songs" else shelves[0]
+        listOf(first) + shelves.drop(1)
+    }
+    // Show cached shelves instantly, then refresh one at a time in the background.
+    LaunchedEffect(shelfList) {
+        restoreShelves(ctx, shelfList.map { it.second })
+        for ((_, q) in shelfList) loadShelf(ctx, extractor, q)
     }
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
         if (recent.isNotEmpty()) {
@@ -97,7 +128,7 @@ fun HomeShelves(
                 }
             }
         }
-        items(shelves) { (title, query) ->
+        items(shelfList) { (title, query) ->
             val songs = ShelfCache.data[query]
             val failed = ShelfCache.failed[query] == true
             Column(modifier = Modifier.padding(top = 16.dp)) {
@@ -116,7 +147,7 @@ fun HomeShelves(
                         if (failed) {
                             Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
                                 Text("Could not load this shelf", color = TextSecondary, fontSize = 13.sp)
-                                androidx.compose.material3.TextButton(onClick = { scope.launch { loadShelf(extractor, query) } }) {
+                                androidx.compose.material3.TextButton(onClick = { scope.launch { loadShelf(ctx, extractor, query) } }) {
                                     Text("Retry", color = AmberOrange)
                                 }
                             }

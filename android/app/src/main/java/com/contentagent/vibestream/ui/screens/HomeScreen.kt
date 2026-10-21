@@ -535,6 +535,7 @@ fun HomeScreen(
             } else {
                 HomeShelves(
                     recent = recentSongs,
+                    liked = likedSongs,
                     extractor = extractor,
                     currentSongId = currentSong?.id,
                     onPlay = { sg, ctx -> playerController.playSong(sg, ctx) },
