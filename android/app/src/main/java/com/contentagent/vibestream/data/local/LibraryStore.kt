@@ -12,21 +12,23 @@ data class Playlist(val name: String, val songs: List<Song> = emptyList())
 
 /** Liked songs, recently played and playlists, stored on the device only. */
 class LibraryStore(context: Context) {
-    private val prefs = context.getSharedPreferences("vibestream_library", Context.MODE_PRIVATE)
-    private val gson = Gson()
+    @PublishedApi internal val prefs = context.getSharedPreferences("vibestream_library", Context.MODE_PRIVATE)
+    @PublishedApi internal val gson = Gson()
 
-    private val _liked = MutableStateFlow(load("liked", object : TypeToken<List<Song>>() {}.type))
+    private val _liked = MutableStateFlow<List<Song>>(load<Song>("liked"))
     val liked: StateFlow<List<Song>> = _liked.asStateFlow()
 
-    private val _recent = MutableStateFlow(load("recent", object : TypeToken<List<Song>>() {}.type))
+    private val _recent = MutableStateFlow<List<Song>>(load<Song>("recent"))
     val recent: StateFlow<List<Song>> = _recent.asStateFlow()
 
-    private val _playlists = MutableStateFlow(load("playlists", object : TypeToken<List<Playlist>>() {}.type))
+    private val _playlists = MutableStateFlow<List<Playlist>>(load<Playlist>("playlists"))
     val playlists: StateFlow<List<Playlist>> = _playlists.asStateFlow()
 
-    private fun <T> load(key: String, type: java.lang.reflect.Type): List<T> {
+    private inline fun <reified T> load(key: String): List<T> {
         val json = prefs.getString(key, null) ?: return emptyList()
-        return try { gson.fromJson<List<T>>(json, type) ?: emptyList() } catch (e: Exception) { emptyList() }
+        return try {
+            gson.fromJson<List<T>>(json, object : TypeToken<List<T>>() {}.type) ?: emptyList()
+        } catch (e: Exception) { emptyList() }
     }
 
     private fun save(key: String, value: Any) {
