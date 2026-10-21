@@ -7,6 +7,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -174,7 +176,7 @@ fun HomeShelves(
                         contentAlignment = androidx.compose.ui.Alignment.Center
                     ) {
                         androidx.compose.material3.Icon(
-                            imageVector = androidx.compose.material.icons.Icons.Default.PlayArrow,
+                            imageVector = Icons.Default.PlayArrow,
                             contentDescription = "Play your mood mix",
                             tint = androidx.compose.ui.graphics.Color.Black,
                             modifier = Modifier.size(32.dp)
