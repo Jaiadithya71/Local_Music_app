@@ -74,6 +74,57 @@ class MusicPlayerController(
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
+    // ---- Play queue ----
+    private val _queue = MutableStateFlow<List<Song>>(emptyList())
+    val queue: StateFlow<List<Song>> = _queue.asStateFlow()
+    private val _queueIndex = MutableStateFlow(-1)
+    val queueIndex: StateFlow<Int> = _queueIndex.asStateFlow()
+    private val _shuffle = MutableStateFlow(false)
+    val shuffle: StateFlow<Boolean> = _shuffle.asStateFlow()
+    private val _repeat = MutableStateFlow(0) // 0 off, 1 all, 2 one
+    val repeat: StateFlow<Int> = _repeat.asStateFlow()
+
+    fun toggleShuffle() { _shuffle.value = !_shuffle.value }
+    fun cycleRepeat() { _repeat.value = (_repeat.value + 1) % 3 }
+
+    fun playAt(index: Int) {
+        val q = _queue.value
+        if (index !in q.indices) return
+        _queueIndex.value = index
+        startPlayback(q[index])
+    }
+
+    fun next() {
+        val q = _queue.value
+        if (q.isEmpty()) return
+        val i = _queueIndex.value
+        if (_repeat.value == 2) { playAt(i.coerceAtLeast(0)); return }
+        val target = when {
+            _shuffle.value && q.size > 1 -> {
+                var r = q.indices.random()
+                while (r == i) r = q.indices.random()
+                r
+            }
+            i + 1 < q.size -> i + 1
+            _repeat.value == 1 -> 0
+            else -> -1
+        }
+        if (target >= 0) playAt(target)
+    }
+
+    fun previous() {
+        val q = _queue.value
+        if (q.isEmpty()) return
+        if ((controller?.currentPosition ?: 0L) > 3000L) { seekTo(0); return }
+        val i = _queueIndex.value
+        val target = when {
+            i - 1 >= 0 -> i - 1
+            _repeat.value == 1 -> q.size - 1
+            else -> 0
+        }
+        playAt(target)
+    }
+
     private val listener = object : Player.Listener {
             override fun onIsPlayingChanged(playing: Boolean) {
                 _isPlaying.value = playing
@@ -98,6 +149,7 @@ class MusicPlayerController(
                         _isBuffering.value = false
                         _isPlaying.value = false
                         stopProgressTracker()
+                        next()
                     }
                     Player.STATE_IDLE -> {
                         _isBuffering.value = false
@@ -192,7 +244,18 @@ class MusicPlayerController(
         return MediaItem.Builder().setUri(uri).setMediaId(song.id).setMediaMetadata(metadata).build()
     }
 
-    fun playSong(song: Song) {
+    fun playSong(song: Song, context: List<Song>? = null) {
+        if (context != null && context.any { it.id == song.id }) {
+            _queue.value = context
+            _queueIndex.value = context.indexOfFirst { it.id == song.id }
+        } else {
+            _queue.value = listOf(song)
+            _queueIndex.value = 0
+        }
+        startPlayback(song)
+    }
+
+    private fun startPlayback(song: Song) {
         playerScope.launch {
             _errorMessage.value = null
             _isBuffering.value = true

@@ -35,7 +35,7 @@ private val shelves = listOf(
 fun HomeShelves(
     extractor: YouTubeExtractor,
     currentSongId: String?,
-    onPlay: (Song) -> Unit,
+    onPlay: (Song, List<Song>) -> Unit,
     onSeeAll: (String) -> Unit,
     recent: List<Song> = emptyList()
 ) {
@@ -55,7 +55,7 @@ fun HomeShelves(
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         items(recent.take(12), key = { it.id }) { song ->
-                            Column(modifier = Modifier.width(140.dp).clickable { onPlay(song) }) {
+                            Column(modifier = Modifier.width(140.dp).clickable { onPlay(song, recent) }) {
                                 AsyncImage(
                                     model = song.thumbnailUrl.ifEmpty { "https://i.ytimg.com/vi/${song.id}/hqdefault.jpg" },
                                     contentDescription = song.title,
@@ -99,7 +99,7 @@ fun HomeShelves(
                     ) {
                         items(list, key = { it.id }) { song ->
                             Column(
-                                modifier = Modifier.width(140.dp).clickable { onPlay(song) }
+                                modifier = Modifier.width(140.dp).clickable { onPlay(song, list) }
                             ) {
                                 AsyncImage(
                                     model = song.thumbnailUrl,

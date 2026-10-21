@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -95,7 +96,7 @@ fun LibrarySection(
     section: Int, // 1 liked, 2 playlists, 3 recent
     library: LibraryStore,
     currentSongId: String?,
-    onPlay: (Song) -> Unit
+    onPlay: (Song, List<Song>) -> Unit
 ) {
     val liked by library.liked.collectAsState()
     val recent by library.recent.collectAsState()
@@ -124,7 +125,7 @@ fun LibrarySection(
                     }
                     LazyColumn {
                         items(open.songs, key = { it.id }) { s ->
-                            SongRow(s, s.id == currentSongId, { onPlay(s) }) {
+                            SongRow(s, s.id == currentSongId, { onPlay(s, open.songs) }) {
                                 IconButton(onClick = { library.removeFromPlaylist(open.name, s.id) }) {
                                     Icon(Icons.Default.Close, contentDescription = "Remove", tint = TextSecondary)
                                 }
@@ -167,14 +168,14 @@ fun LibrarySection(
 }
 
 @Composable
-private fun SongList(songs: List<Song>, emptyText: String, currentSongId: String?, onPlay: (Song) -> Unit) {
+private fun SongList(songs: List<Song>, emptyText: String, currentSongId: String?, onPlay: (Song, List<Song>) -> Unit) {
     if (songs.isEmpty()) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text(emptyText, color = TextTertiary, modifier = Modifier.padding(32.dp))
         }
     } else {
         LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-            items(songs, key = { it.id }) { s -> SongRow(s, s.id == currentSongId, { onPlay(s) }) }
+            items(songs, key = { it.id }) { s -> SongRow(s, s.id == currentSongId, { onPlay(s, songs) }) }
         }
     }
 }
@@ -219,4 +220,34 @@ fun AddToPlaylistDialog(library: LibraryStore, song: Song, onDismiss: () -> Unit
     if (showNew) {
         NewPlaylistDialog(onDismiss = { showNew = false }, onCreate = { library.createPlaylist(it); library.addToPlaylist(it.trim(), song); showNew = false; onDismiss() })
     }
+}
+
+@Composable
+fun QueueDialog(queue: List<Song>, index: Int, onPick: (Int) -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = DarkSurfaceElevated,
+        title = { Text("Queue (${queue.size})", color = TextPrimary) },
+        text = {
+            LazyColumn(modifier = Modifier.heightIn(max = 420.dp)) {
+                itemsIndexed(queue) { i, s ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable { onPick(i) }.padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            if (i == index) "▶" else "${i + 1}",
+                            color = if (i == index) AmberOrange else TextTertiary,
+                            modifier = Modifier.width(28.dp), fontSize = 12.sp
+                        )
+                        Column {
+                            Text(s.title, color = if (i == index) AmberOrange else TextPrimary, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(s.artist, color = TextSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close", color = AmberOrange) } }
+    )
 }

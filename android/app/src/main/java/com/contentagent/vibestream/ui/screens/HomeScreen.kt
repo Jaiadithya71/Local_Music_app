@@ -84,6 +84,11 @@ fun HomeScreen(
     val likedSongs by library.liked.collectAsState()
     val recentSongs by library.recent.collectAsState()
     var librarySection by remember { mutableStateOf(0) } // 0 downloads, 1 liked, 2 playlists, 3 recent
+    val queueList by playerController.queue.collectAsState()
+    val queueIdx by playerController.queueIndex.collectAsState()
+    val shuffleOn by playerController.shuffle.collectAsState()
+    val repeatMode by playerController.repeat.collectAsState()
+    var showQueue by remember { mutableStateOf(false) }
     var addToPlaylistSong by remember { mutableStateOf<Song?>(null) }
     LaunchedEffect(currentSong?.id) {
         currentSong?.let { library.addRecent(it) }
@@ -399,7 +404,7 @@ fun HomeScreen(
                                         downloadProgress = progress,
                                         isDownloaded = isDownloaded,
                                         onPlayClick = {
-                                            playerController.playSong(activeSong)
+                                            playerController.playSong(activeSong, searchResults)
                                         },
                                         onDownloadClick = {
                                             coroutineScope.launch {
@@ -442,7 +447,7 @@ fun HomeScreen(
                             section = librarySection,
                             library = library,
                             currentSongId = currentSong?.id,
-                            onPlay = { playerController.playSong(offlineStorage.getLocalSong(it.id) ?: it) }
+                            onPlay = { sg, ctx -> playerController.playSong(offlineStorage.getLocalSong(sg.id) ?: sg, ctx) }
                         )
                     }
                 } else
@@ -515,7 +520,7 @@ fun HomeScreen(
                                     downloadProgress = 1f,
                                     isDownloaded = true,
                                     onPlayClick = {
-                                        playerController.playSong(song)
+                                        playerController.playSong(song, downloadedSongs)
                                     },
                                     onDownloadClick = {},
                                     onDeleteClick = {
@@ -532,7 +537,7 @@ fun HomeScreen(
                     recent = recentSongs,
                     extractor = extractor,
                     currentSongId = currentSong?.id,
-                    onPlay = { playerController.playSong(it) },
+                    onPlay = { sg, ctx -> playerController.playSong(sg, ctx) },
                     onSeeAll = { q -> selectedTab = 1; searchQuery = q; performSearch(q) }
                 )
             }
@@ -564,11 +569,21 @@ fun HomeScreen(
                     downloadManager.downloadTrack(song)
                 }
             },
+            shuffle = shuffleOn,
+            repeat = repeatMode,
+            onShuffle = { playerController.toggleShuffle() },
+            onRepeat = { playerController.cycleRepeat() },
+            onNext = { playerController.next() },
+            onPrevious = { playerController.previous() },
+            onQueue = { showQueue = true },
             isLiked = likedSongs.any { it.id == song.id },
             onToggleLike = { library.toggleLike(song) },
             onAddToPlaylist = { addToPlaylistSong = song },
             onDismiss = { isPlayerSheetVisible = false }
         )
+    }
+    if (showQueue) {
+        QueueDialog(queue = queueList, index = queueIdx, onPick = { playerController.playAt(it) }, onDismiss = { showQueue = false })
     }
     addToPlaylistSong?.let { sg ->
         AddToPlaylistDialog(library = library, song = sg, onDismiss = { addToPlaylistSong = null })

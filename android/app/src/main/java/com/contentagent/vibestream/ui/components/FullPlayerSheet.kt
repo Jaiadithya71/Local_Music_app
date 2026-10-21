@@ -38,6 +38,13 @@ fun FullPlayerSheet(
     onSkipBackward: () -> Unit,
     onDownloadClick: () -> Unit,
     onDismiss: () -> Unit,
+    shuffle: Boolean = false,
+    repeat: Int = 0,
+    onShuffle: () -> Unit = {},
+    onRepeat: () -> Unit = {},
+    onNext: () -> Unit = {},
+    onPrevious: () -> Unit = {},
+    onQueue: () -> Unit = {},
     isLiked: Boolean = false,
     onToggleLike: () -> Unit = {},
     onAddToPlaylist: () -> Unit = {}
@@ -165,97 +172,66 @@ fun FullPlayerSheet(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Playback Controls Row
+            // Playback controls: shuffle, previous, play/pause, next, repeat
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Download button
-                when {
-                    isDownloading -> {
-                        CircularProgressIndicator(
-                            progress = downloadProgress,
-                            color = AmberOrange,
-                            strokeWidth = 2.dp,
-                            modifier = Modifier.size(28.dp)
-                        )
-                    }
-                    isDownloaded -> {
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = "Saved locally",
-                            tint = SuccessGreen,
-                            modifier = Modifier.size(30.dp)
-                        )
-                    }
-                    else -> {
-                        IconButton(onClick = onDownloadClick) {
-                            Icon(
-                                imageVector = Icons.Default.Download,
-                                contentDescription = "Download song for offline listening",
-                                tint = TextSecondary,
-                                modifier = Modifier.size(28.dp)
-                            )
-                        }
-                    }
-                }
-
-                // Skip -10s
-                IconButton(onClick = onSkipBackward) {
+                IconButton(onClick = onShuffle) {
                     Icon(
-                        imageVector = Icons.Default.Replay10,
-                        contentDescription = "Rewind 10 seconds",
-                        tint = TextPrimary,
-                        modifier = Modifier.size(32.dp)
+                        Icons.Default.Shuffle, contentDescription = "Shuffle",
+                        tint = if (shuffle) AmberOrange else TextSecondary, modifier = Modifier.size(26.dp)
                     )
                 }
-
-                // Big Play / Pause / Buffering button
+                IconButton(onClick = onPrevious) {
+                    Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", tint = TextPrimary, modifier = Modifier.size(38.dp))
+                }
                 if (isBuffering) {
-                    CircularProgressIndicator(
-                        color = AmberOrange,
-                        strokeWidth = 3.dp,
-                        modifier = Modifier.size(48.dp)
-                    )
+                    CircularProgressIndicator(color = AmberOrange, strokeWidth = 3.dp, modifier = Modifier.size(48.dp))
                 } else {
                     IconButton(
                         onClick = onTogglePlayPause,
-                        modifier = Modifier
-                            .size(64.dp)
-                            .clip(RoundedCornerShape(32.dp))
-                            .background(AmberOrange)
+                        modifier = Modifier.size(64.dp).clip(RoundedCornerShape(32.dp)).background(AmberOrange)
                     ) {
                         Icon(
                             imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                             contentDescription = if (isPlaying) "Pause" else "Play",
-                            tint = Color.Black,
-                            modifier = Modifier.size(36.dp)
+                            tint = Color.Black, modifier = Modifier.size(36.dp)
                         )
                     }
                 }
-
-                // Skip +10s
-                IconButton(onClick = onSkipForward) {
+                IconButton(onClick = onNext) {
+                    Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = TextPrimary, modifier = Modifier.size(38.dp))
+                }
+                IconButton(onClick = onRepeat) {
                     Icon(
-                        imageVector = Icons.Default.Forward10,
-                        contentDescription = "Fast-forward 10 seconds",
-                        tint = TextPrimary,
-                        modifier = Modifier.size(32.dp)
+                        if (repeat == 2) Icons.Default.RepeatOne else Icons.Default.Repeat,
+                        contentDescription = "Repeat",
+                        tint = if (repeat > 0) AmberOrange else TextSecondary, modifier = Modifier.size(26.dp)
                     )
                 }
-
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                when {
+                    isDownloading -> CircularProgressIndicator(progress = downloadProgress, color = AmberOrange, strokeWidth = 2.dp, modifier = Modifier.size(26.dp))
+                    isDownloaded -> Icon(Icons.Default.CheckCircle, contentDescription = "Saved locally", tint = SuccessGreen, modifier = Modifier.size(28.dp))
+                    else -> IconButton(onClick = onDownloadClick) {
+                        Icon(Icons.Default.Download, contentDescription = "Download", tint = TextSecondary, modifier = Modifier.size(28.dp))
+                    }
+                }
                 IconButton(onClick = onAddToPlaylist) {
                     Icon(Icons.Default.PlaylistAdd, contentDescription = "Add to playlist", tint = TextSecondary, modifier = Modifier.size(28.dp))
+                }
+                IconButton(onClick = onQueue) {
+                    Icon(Icons.Default.QueueMusic, contentDescription = "Queue", tint = TextSecondary, modifier = Modifier.size(28.dp))
                 }
                 IconButton(onClick = onDismiss) {
                     Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Collapse player", tint = TextSecondary, modifier = Modifier.size(30.dp))
