@@ -144,7 +144,9 @@ fun HomeScreen(
                     currentPosition = currentPosition,
                     duration = duration,
                     onTogglePlayPause = { playerController.togglePlayPause() },
-                    onClick = { isPlayerSheetVisible = true }
+                    onClick = { isPlayerSheetVisible = true },
+                    onNext = { playerController.next() },
+                    onPrevious = { playerController.previous() }
                 )
             }
             NavigationBar(containerColor = DarkSurface) {

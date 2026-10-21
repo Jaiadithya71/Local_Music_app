@@ -141,13 +141,27 @@ class MusicPlayerController(
         val target = computeNextIndex(q, i)
         if (_shuffle.value && i >= 0 && i != target && i !in shufflePlayed) shufflePlayed.add(i)
         plannedShuffleNext = -1
-        if (target >= 0) playAt(target)
+        if (target < 0) return
+        // Gapless path: ExoPlayer already holds the prefetched target as its next
+        // item, so seek inside the playlist instead of re-resolving.
+        val c = controller
+        if (c != null && c.hasNextMediaItem() &&
+            c.getMediaItemAt(c.currentMediaItemIndex + 1).mediaId == q[target].id) {
+            c.seekToNextMediaItem()
+            return
+        }
+        playAt(target)
     }
 
     fun previous() {
         val q = _queue.value
         if (q.isEmpty()) return
         if ((controller?.currentPosition ?: 0L) > 3000L) { seekTo(0); return }
+        // Played history lives in the player playlist (kept by the transition
+        // listener), so "previous" is an instant native seek when possible.
+        controller?.let { c ->
+            if (c.currentMediaItemIndex > 0) { c.seekToPreviousMediaItem(); return }
+        }
         val i = _queueIndex.value
         val target = when {
             i - 1 >= 0 -> i - 1
@@ -206,7 +220,8 @@ class MusicPlayerController(
                 plannedShuffleNext = -1
                 // Drop already-played items so the player playlist stays compact.
                 controller?.let { c ->
-                    while (c.mediaItemCount > 1 && c.currentMediaItemIndex > 0) c.removeMediaItem(0)
+                    // Keep recent played items so notification/lock-screen Previous works.
+                    while (c.mediaItemCount > 1 && c.currentMediaItemIndex > 10) c.removeMediaItem(0)
                 }
                 scheduleNextPrefetch()
             }
@@ -241,6 +256,8 @@ class MusicPlayerController(
         playerScope.launch {
             try {
                 awaitController().addListener(listener)
+                PlaybackService.nextHandler = { next() }
+                PlaybackService.previousHandler = { previous() }
                 restoreCurrentSong()
                 _isPlaying.value = controller?.isPlaying == true
                 if (_isPlaying.value) startProgressTracker()
@@ -321,7 +338,10 @@ class MusicPlayerController(
                 }
                 if (gen != playbackGeneration) return@launch
                 val c = controller ?: return@launch
-                if (c.mediaItemCount == 1 && c.currentMediaItem?.mediaId == q[i].id) {
+                if (c.currentMediaItem?.mediaId != q[i].id) return@launch
+                val hasItNext = c.hasNextMediaItem() &&
+                    c.getMediaItemAt(c.currentMediaItemIndex + 1).mediaId == nextSong.id
+                if (!hasItNext) {
                     c.addMediaItem(buildItem(nextSong, Uri.parse(url)))
                 }
             } catch (e: Exception) {

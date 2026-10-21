@@ -16,6 +16,13 @@ import androidx.media3.session.MediaSessionService
  */
 class PlaybackService : MediaSessionService() {
 
+    companion object {
+        // Set by MusicPlayerController: notification / lock-screen skip taps land
+        // here when the ExoPlayer playlist itself has no adjacent item to seek to.
+        var nextHandler: (() -> Unit)? = null
+        var previousHandler: (() -> Unit)? = null
+    }
+
     private var mediaSession: MediaSession? = null
 
     override fun onCreate() {
@@ -45,11 +52,37 @@ class PlaybackService : MediaSessionService() {
             .setUsage(androidx.media3.common.C.USAGE_MEDIA)
             .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MUSIC)
             .build()
-        val player = ExoPlayer.Builder(this)
+        val exo = ExoPlayer.Builder(this)
             .setMediaSourceFactory(DefaultMediaSourceFactory(factory))
             .setAudioAttributes(audioAttrs, /* handleAudioFocus= */ true)
             .setHandleAudioBecomingNoisy(true)
             .build()
+        // Always advertise prev/next so the lock-screen and notification controls
+        // show skip buttons. When the playlist has the adjacent item we let
+        // ExoPlayer seek (gapless); otherwise the app controller resolves the
+        // next track on the fly.
+        val player = object : androidx.media3.common.ForwardingPlayer(exo) {
+            override fun getAvailableCommands(): Player.Commands {
+                return super.getAvailableCommands().buildUpon()
+                    .add(Player.COMMAND_SEEK_TO_NEXT)
+                    .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+                    .add(Player.COMMAND_SEEK_TO_PREVIOUS)
+                    .add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+                    .build()
+            }
+            override fun seekToNext() {
+                if (exo.hasNextMediaItem()) super.seekToNextMediaItem() else nextHandler?.invoke()
+            }
+            override fun seekToNextMediaItem() {
+                if (exo.hasNextMediaItem()) super.seekToNextMediaItem() else nextHandler?.invoke()
+            }
+            override fun seekToPrevious() {
+                if (exo.currentMediaItemIndex > 0) super.seekToPreviousMediaItem() else previousHandler?.invoke()
+            }
+            override fun seekToPreviousMediaItem() {
+                if (exo.currentMediaItemIndex > 0) super.seekToPreviousMediaItem() else previousHandler?.invoke()
+            }
+        }
         mediaSession = MediaSession.Builder(this, player).build()
     }
 

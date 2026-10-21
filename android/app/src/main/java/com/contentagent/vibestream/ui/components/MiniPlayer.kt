@@ -7,6 +7,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -35,7 +37,9 @@ fun MiniPlayer(
     duration: Long,
     onTogglePlayPause: () -> Unit,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onNext: () -> Unit = {},
+    onPrevious: () -> Unit = {}
 ) {
     val progress = if (duration > 0) (currentPosition.toFloat() / duration.toFloat()).coerceIn(0f, 1f) else 0f
 
@@ -106,7 +110,18 @@ fun MiniPlayer(
                     )
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+
+                // Previous / Play-Pause / Next - skip controls on the mini bar so a
+                // song can be skipped without opening Now Playing.
+                IconButton(onClick = onPrevious, modifier = Modifier.size(34.dp)) {
+                    Icon(
+                        imageVector = Icons.Default.SkipPrevious,
+                        contentDescription = "Previous",
+                        tint = TextSecondary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
 
                 // Play / Pause / Buffering button
                 if (isBuffering) {
@@ -130,6 +145,15 @@ fun MiniPlayer(
                             modifier = Modifier.size(24.dp)
                         )
                     }
+                }
+
+                IconButton(onClick = onNext, modifier = Modifier.size(34.dp)) {
+                    Icon(
+                        imageVector = Icons.Default.SkipNext,
+                        contentDescription = "Next",
+                        tint = TextPrimary,
+                        modifier = Modifier.size(26.dp)
+                    )
                 }
             }
         }
