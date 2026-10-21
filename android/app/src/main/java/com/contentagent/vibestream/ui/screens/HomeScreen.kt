@@ -83,6 +83,7 @@ fun HomeScreen(
     val playerError by playerController.errorMessage.collectAsState()
     val likedSongs by library.liked.collectAsState()
     val recentSongs by library.recent.collectAsState()
+    val userPlaylists by library.playlists.collectAsState()
     var librarySection by remember { mutableStateOf(0) } // 0 downloads, 1 liked, 2 playlists, 3 recent
     val queueList by playerController.queue.collectAsState()
     val queueIdx by playerController.queueIndex.collectAsState()
@@ -536,6 +537,11 @@ fun HomeScreen(
                 HomeShelves(
                     recent = recentSongs,
                     liked = likedSongs,
+                    playlists = userPlaylists,
+                    onPlayMood = { q ->
+                        playerController.setShuffle(true)
+                        playerController.playSong(q.first(), q)
+                    },
                     extractor = extractor,
                     currentSongId = currentSong?.id,
                     onPlay = { sg, ctx -> playerController.playSong(sg, ctx) },

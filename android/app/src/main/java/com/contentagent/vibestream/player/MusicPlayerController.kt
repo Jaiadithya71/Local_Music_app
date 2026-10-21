@@ -85,6 +85,7 @@ class MusicPlayerController(
     val repeat: StateFlow<Int> = _repeat.asStateFlow()
 
     fun toggleShuffle() { _shuffle.value = !_shuffle.value }
+    fun setShuffle(on: Boolean) { _shuffle.value = on }
     fun cycleRepeat() { _repeat.value = (_repeat.value + 1) % 3 }
 
     fun playAt(index: Int) {

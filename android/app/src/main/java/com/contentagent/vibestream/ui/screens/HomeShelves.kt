@@ -37,6 +37,32 @@ private object ShelfCache {
     var restored = false
 }
 
+private val mixSeedQueries = listOf(
+    "tamil hit songs", "bollywood hit songs", "tamil philosophical songs", "retro classic songs"
+)
+
+private fun restoreMoodMix(ctx: android.content.Context): List<Song> {
+    val json = shelfPrefs(ctx).getString("mood_mix", null) ?: return emptyList()
+    val type = object : com.google.gson.reflect.TypeToken<List<Song>>() {}.type
+    return try { com.google.gson.Gson().fromJson(json, type) ?: emptyList() } catch (e: Exception) { emptyList() }
+}
+
+private fun saveMoodMix(ctx: android.content.Context, songs: List<Song>) {
+    shelfPrefs(ctx).edit().putString("mood_mix", com.google.gson.Gson().toJson(songs)).apply()
+}
+
+/** Liked + recent + his playlists + cached taste-genre songs, deduped. No network. */
+private fun buildMoodMix(
+    liked: List<Song>,
+    recent: List<Song>,
+    playlists: List<com.contentagent.vibestream.data.local.Playlist>
+): List<Song> {
+    val genreSongs = mixSeedQueries.flatMap { ShelfCache.data[it] ?: emptyList() }
+    return (liked + recent + playlists.flatMap { it.songs } + genreSongs)
+        .distinctBy { it.id }
+        .take(50)
+}
+
 private fun shelfPrefs(ctx: android.content.Context) =
     ctx.getSharedPreferences("vibestream_shelves", android.content.Context.MODE_PRIVATE)
 
@@ -78,7 +104,9 @@ fun HomeShelves(
     onPlay: (Song, List<Song>) -> Unit,
     onSeeAll: (String) -> Unit,
     recent: List<Song> = emptyList(),
-    liked: List<Song> = emptyList()
+    liked: List<Song> = emptyList(),
+    playlists: List<com.contentagent.vibestream.data.local.Playlist> = emptyList(),
+    onPlayMood: (List<Song>) -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
     val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -90,12 +118,70 @@ fun HomeShelves(
         val first = if (topArtist != null) "Top picks for you" to "$topArtist songs" else shelves[0]
         listOf(first) + shelves.drop(1)
     }
+    var moodMix by remember { mutableStateOf(restoreMoodMix(ctx)) }
     // Show cached shelves instantly, then refresh one at a time in the background.
     LaunchedEffect(shelfList) {
         restoreShelves(ctx, shelfList.map { it.second })
         for ((_, q) in shelfList) loadShelf(ctx, extractor, q)
+        for (q in mixSeedQueries) if (ShelfCache.data[q] == null) loadShelf(ctx, extractor, q)
+        moodMix = buildMoodMix(liked, recent, playlists)
+        if (moodMix.isNotEmpty()) saveMoodMix(ctx, moodMix)
+    }
+    // Keep the mix in step with his library without hitting the network.
+    LaunchedEffect(liked.size, recent.size, playlists.size) {
+        val rebuilt = buildMoodMix(liked, recent, playlists)
+        if (rebuilt.isNotEmpty()) {
+            moodMix = rebuilt
+            saveMoodMix(ctx, rebuilt)
+        }
     }
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
+        if (moodMix.isNotEmpty()) {
+            item {
+                Row(
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(DarkSurfaceElevated)
+                        .clickable {
+                            val q = moodMix.shuffled()
+                            onPlayMood(q)
+                        }
+                        .padding(16.dp),
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Your mood",
+                            color = TextPrimary,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Your Tamil, Hindi, philosophical and retro mix",
+                            color = TextSecondary,
+                            fontSize = 13.sp
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .clip(RoundedCornerShape(28.dp))
+                            .background(AmberOrange),
+                        contentAlignment = androidx.compose.ui.Alignment.Center
+                    ) {
+                        androidx.compose.material3.Icon(
+                            imageVector = androidx.compose.material.icons.Icons.Default.PlayArrow,
+                            contentDescription = "Play your mood mix",
+                            tint = androidx.compose.ui.graphics.Color.Black,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+                }
+            }
+        }
         if (recent.isNotEmpty()) {
             item {
                 Column(modifier = Modifier.padding(top = 16.dp)) {
