@@ -89,6 +89,7 @@ fun HomeScreen(
     val likedSongs by library.liked.collectAsState()
     val recentSongs by library.recent.collectAsState()
     val userPlaylists by library.playlists.collectAsState()
+    val artistSkips by library.artistSkips.collectAsState()
     var librarySection by remember { mutableStateOf(0) } // 0 downloads, 1 liked, 2 playlists, 3 recent
     val queueList by playerController.queue.collectAsState()
     val queueIdx by playerController.queueIndex.collectAsState()
@@ -145,7 +146,11 @@ fun HomeScreen(
                     duration = duration,
                     onTogglePlayPause = { playerController.togglePlayPause() },
                     onClick = { isPlayerSheetVisible = true },
-                    onNext = { playerController.next() },
+                    onNext = {
+                        val s = currentSong
+                        if (s != null && currentPosition in 1..45_000) library.recordSkip(s)
+                        playerController.next()
+                    },
                     onPrevious = { playerController.previous() }
                 )
             }
@@ -652,7 +657,8 @@ fun HomeScreen(
                     extractor = extractor,
                     currentSongId = currentSong?.id,
                     onPlay = { sg, ctx -> playerController.playSong(sg, ctx) },
-                    onSeeAll = { q -> selectedTab = 1; searchQuery = q; performSearch(q) }
+                    onSeeAll = { q -> selectedTab = 1; searchQuery = q; performSearch(q) },
+                    skippedArtists = artistSkips.filterValues { it >= 2 }.keys
                 )
             }
         }
@@ -710,7 +716,10 @@ fun HomeScreen(
             repeat = repeatMode,
             onShuffle = { playerController.toggleShuffle() },
             onRepeat = { playerController.cycleRepeat() },
-            onNext = { playerController.next() },
+            onNext = {
+                if (currentPosition in 1..45_000) library.recordSkip(song)
+                playerController.next()
+            },
             onPrevious = { playerController.previous() },
             onQueue = { showQueue = true },
             isLiked = likedSongs.any { it.id == song.id },

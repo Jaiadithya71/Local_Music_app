@@ -24,6 +24,25 @@ class LibraryStore(context: Context) {
     private val _playlists = MutableStateFlow<List<Playlist>>(load<Playlist>("playlists"))
     val playlists: StateFlow<List<Playlist>> = _playlists.asStateFlow()
 
+    // Negative taste signal: how often an artist's song was skipped early.
+    private val _artistSkips = MutableStateFlow(loadSkips())
+    val artistSkips: StateFlow<Map<String, Int>> = _artistSkips.asStateFlow()
+
+    private fun loadSkips(): Map<String, Int> {
+        val json = prefs.getString("artist_skips", null) ?: return emptyMap()
+        return try {
+            gson.fromJson<Map<String, Int>>(json, object : TypeToken<Map<String, Int>>() {}.type) ?: emptyMap()
+        } catch (e: Exception) { emptyMap() }
+    }
+
+    /** Count an early skip (user jumped to the next track soon after it started). */
+    fun recordSkip(song: Song) {
+        if (song.artist.isBlank() || song.artist == "Unknown Artist") return
+        val map = _artistSkips.value + (song.artist to ((_artistSkips.value[song.artist] ?: 0) + 1))
+        _artistSkips.value = map
+        prefs.edit().putString("artist_skips", gson.toJson(map)).apply()
+    }
+
     private inline fun <reified T> load(key: String): List<T> {
         val json = prefs.getString(key, null) ?: return emptyList()
         return try {

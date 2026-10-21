@@ -38,7 +38,25 @@ private val shelves = listOf(
 private object ShelfCache {
     val data = mutableStateMapOf<String, List<Song>>()
     val failed = mutableStateMapOf<String, Boolean>()
+    // Full fetched result pool per shelf (the UI shows a ranked window of it),
+    // ids already shown this session, a drift counter for refill queries, and a
+    // loading flag for the "Show more" card.
+    val pool = mutableMapOf<String, List<Song>>()
+    val seen = mutableMapOf<String, MutableSet<String>>()
+    val drift = mutableMapOf<String, Int>()
+    val loadingMore = mutableStateMapOf<String, Boolean>()
     var restored = false
+}
+
+/** Liked artists float up, artists skipped twice or more sink. Stable within a group. */
+private fun rankForTaste(items: List<Song>, likedArtists: Set<String>, skippedArtists: Set<String>): List<Song> {
+    return items.sortedBy {
+        when {
+            likedArtists.contains(it.artist) -> 0
+            skippedArtists.contains(it.artist) -> 2
+            else -> 1
+        }
+    }
 }
 
 private val mixSeedQueries = listOf(
@@ -96,11 +114,62 @@ private suspend fun loadShelf(ctx: android.content.Context, extractor: YouTubeEx
         if (result.isNotEmpty()) break
     }
     if (result.isNotEmpty()) {
-        val clean = result.take(12).map { it.copy(streamUrl = null) }
-        ShelfCache.data[k] = clean
-        shelfPrefs(ctx).edit().putString(k, com.google.gson.Gson().toJson(clean)).apply()
+        val clean = result.map { it.copy(streamUrl = null) }
+        ShelfCache.pool[k] = clean
+        val seenSet = ShelfCache.seen.getOrPut(k) { mutableSetOf() }
+        val window = rankForTaste(clean.filter { it.id !in seenSet }, likedArtistsProvider(), skippedArtistsProvider()).take(12)
+        seenSet.addAll(window.map { it.id })
+        ShelfCache.data[k] = window
+        shelfPrefs(ctx).edit().putString(k, com.google.gson.Gson().toJson(window)).apply()
     } else if (ShelfCache.data[k] == null) {
         ShelfCache.failed[k] = true
+    }
+}
+
+// Taste signals for ranking, read from the live library snapshot.
+private var likedArtistsProvider: () -> Set<String> = { emptySet() }
+private var skippedArtistsProvider: () -> Set<String> = { emptySet() }
+
+/**
+ * "Show more" on a shelf: append the next ranked window of unseen songs. When the
+ * pool is exhausted, refetch with a drifting query (mix variant, then the top or
+ * most-liked artist, then "new ...") so the shelf keeps serving fresh picks
+ * instead of the same static list.
+ */
+private suspend fun showMore(ctx: android.content.Context, extractor: YouTubeExtractor, query: String, musicOnly: Boolean, driftArtist: String?) {
+    val k = cacheKey(query, musicOnly)
+    if (ShelfCache.loadingMore[k] == true) return
+    ShelfCache.loadingMore[k] = true
+    try {
+        val seenSet = ShelfCache.seen.getOrPut(k) {
+            (ShelfCache.data[k]?.map { it.id } ?: emptyList()).toMutableSet()
+        }
+        var more = (ShelfCache.pool[k] ?: emptyList()).filter { it.id !in seenSet }
+        var attempts = 0
+        while (more.isEmpty() && attempts < 3) {
+            val d = ShelfCache.drift[k] ?: 0
+            ShelfCache.drift[k] = d + 1
+            val q2 = when (d) {
+                0 -> query
+                1 -> "$query mix"
+                else -> driftArtist?.let { "$it songs" } ?: "new $query"
+            }
+            val result: List<Song> = try {
+                kotlinx.coroutines.withTimeout(20_000) { extractor.searchSongs(q2, musicOnly) }
+            } catch (e: Exception) { emptyList() }
+            val existing = (ShelfCache.pool[k] ?: emptyList()).map { it.id }.toHashSet()
+            val fresh = result.map { it.copy(streamUrl = null) }.filter { it.id !in seenSet && it.id !in existing }
+            ShelfCache.pool[k] = (ShelfCache.pool[k] ?: emptyList()) + fresh
+            more = fresh
+            attempts++
+        }
+        val take = rankForTaste(more, likedArtistsProvider(), skippedArtistsProvider()).take(12)
+        if (take.isNotEmpty()) {
+            seenSet.addAll(take.map { it.id })
+            ShelfCache.data[k] = (ShelfCache.data[k] ?: emptyList()) + take
+        }
+    } finally {
+        ShelfCache.loadingMore.remove(k)
     }
 }
 
@@ -117,7 +186,8 @@ fun HomeShelves(
     onPlayMood: (List<Song>) -> Unit = {},
     onEditTaste: () -> Unit = {},
     musicOnly: Boolean = true,
-    onModeChange: (Boolean) -> Unit = {}
+    onModeChange: (Boolean) -> Unit = {},
+    skippedArtists: Set<String> = emptySet()
 ) {
     val scope = rememberCoroutineScope()
     val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -127,6 +197,8 @@ fun HomeShelves(
         .maxByOrNull { it.value }?.key
     // Taste onboarding answers seed the shelves; defaults when skipped.
     val profile = remember { com.contentagent.vibestream.data.local.TasteStore(ctx).load() }
+    likedArtistsProvider = { liked.map { it.artist }.toSet() }
+    skippedArtistsProvider = { skippedArtists }
     val tasteShelves = profile.languages.take(2).map { "$it hits" to "$it hit songs" } +
         profile.moods.take(2).map { it to "$it songs" }
     val shelfList = remember(topArtist) {
@@ -375,6 +447,33 @@ fun HomeShelves(
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
+                            }
+                        }
+                        // End-of-shelf card: keeps the same shelf going with fresh
+                        // unseen picks instead of a dead end.
+                        item {
+                            val k = cacheKey(query, musicOnly)
+                            val loading = ShelfCache.loadingMore[k] == true
+                            Column(
+                                modifier = Modifier
+                                    .width(96.dp)
+                                    .height(190.dp)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(DarkSurfaceElevated)
+                                    .clickable(enabled = !loading) {
+                                        scope.launch { showMore(ctx, extractor, query, musicOnly, topArtist) }
+                                    }
+                                    .padding(8.dp),
+                                horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                if (loading) {
+                                    CircularProgressIndicator(color = AmberOrange, modifier = Modifier.size(22.dp))
+                                } else {
+                                    Text("+", color = AmberOrange, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                                    Spacer(Modifier.height(6.dp))
+                                    Text("Show more", color = TextSecondary, fontSize = 12.sp)
+                                }
                             }
                         }
                     }
