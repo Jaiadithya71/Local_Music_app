@@ -1,8 +1,12 @@
 package com.contentagent.vibestream.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -47,7 +51,9 @@ fun FullPlayerSheet(
     onQueue: () -> Unit = {},
     isLiked: Boolean = false,
     onToggleLike: () -> Unit = {},
-    onAddToPlaylist: () -> Unit = {}
+    onAddToPlaylist: () -> Unit = {},
+    moreFromArtist: List<Song> = emptyList(),
+    onPlayArtistSong: (Song, List<Song>) -> Unit = { _, _ -> }
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -62,6 +68,7 @@ fun FullPlayerSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp)
                 .padding(bottom = 36.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -235,6 +242,62 @@ fun FullPlayerSheet(
                 }
                 IconButton(onClick = onDismiss) {
                     Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Collapse player", tint = TextSecondary, modifier = Modifier.size(30.dp))
+                }
+            }
+
+            // More from this artist - related picks under the controls, like
+            // Spotify's Now Playing "More from <artist>" carousel.
+            if (moreFromArtist.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(24.dp))
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "More from ${song.artist}",
+                        color = TextPrimary,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        items(moreFromArtist.size) { idx ->
+                            val pick = moreFromArtist[idx]
+                            Column(
+                                modifier = Modifier
+                                    .width(110.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(DarkSurfaceElevated)
+                                    .clickable { onPlayArtistSong(pick, moreFromArtist) }
+                                    .padding(8.dp)
+                            ) {
+                                AsyncImage(
+                                    model = pick.thumbnailUrl.ifEmpty { "https://i.ytimg.com/vi/${pick.id}/hqdefault.jpg" },
+                                    contentDescription = pick.title,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .aspectRatio(1f)
+                                        .clip(RoundedCornerShape(6.dp))
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = pick.title,
+                                    color = TextPrimary,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = pick.artist,
+                                    color = TextSecondary,
+                                    fontSize = 11.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }

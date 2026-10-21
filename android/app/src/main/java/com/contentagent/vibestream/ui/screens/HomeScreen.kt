@@ -95,6 +95,9 @@ fun HomeScreen(
     val shuffleOn by playerController.shuffle.collectAsState()
     val repeatMode by playerController.repeat.collectAsState()
     var showQueue by remember { mutableStateOf(false) }
+    // "More from artist" picks for the Now Playing sheet, cached per artist.
+    var moreFromArtist by remember { mutableStateOf<List<com.contentagent.vibestream.data.model.Song>>(emptyList()) }
+    val moreFromArtistCache = remember { mutableMapOf<String, List<com.contentagent.vibestream.data.model.Song>>() }
     var addToPlaylistSong by remember { mutableStateOf<Song?>(null) }
     val appCtx = androidx.compose.ui.platform.LocalContext.current
     val tasteStore = remember { com.contentagent.vibestream.data.local.TasteStore(appCtx) }
@@ -654,6 +657,29 @@ fun HomeScreen(
     }
 
     // Expandable Full Player Sheet
+    // Fetch related songs when the playing track's artist changes.
+    LaunchedEffect(currentSong?.artist) {
+        val artist = currentSong?.artist.orEmpty()
+        if (artist.isBlank() || artist == "Unknown Artist") {
+            moreFromArtist = emptyList()
+        } else {
+            val cached = moreFromArtistCache[artist]
+            if (cached != null) {
+                moreFromArtist = cached.filter { it.id != currentSong?.id }
+            } else {
+                moreFromArtist = emptyList()
+                val found = try {
+                    extractor.searchSongs(artist, true).filter { it.kind == "song" }.take(10)
+                } catch (e: Exception) { emptyList() }
+                if (found.isNotEmpty()) {
+                    moreFromArtistCache[artist] = found
+                    if (currentSong?.artist == artist) {
+                        moreFromArtist = found.filter { it.id != currentSong?.id }
+                    }
+                }
+            }
+        }
+    }
     if (isPlayerSheetVisible && currentSong != null) {
         val song = currentSong!!
         val isDownloaded = offlineStorage.isDownloaded(song.id)
@@ -688,6 +714,8 @@ fun HomeScreen(
             isLiked = likedSongs.any { it.id == song.id },
             onToggleLike = { library.toggleLike(song) },
             onAddToPlaylist = { addToPlaylistSong = song },
+            moreFromArtist = moreFromArtist,
+            onPlayArtistSong = { sg, ctx -> playerController.playSong(sg, ctx) },
             onDismiss = { isPlayerSheetVisible = false }
         )
     }
