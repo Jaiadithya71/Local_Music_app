@@ -103,37 +103,45 @@ class MusicPlayerController(
     // the queue has alternatives (artist spread, like Spotify's smart shuffle feel).
     private val shufflePlayed = mutableListOf<Int>()
 
+    // Pure pick so the gapless prefetch can plan the shuffle target without
+    // mutating the pass history; the mutation happens when the track is left.
+    private fun smartPick(q: List<Song>, current: Int, played: List<Int>): Int {
+        var pool = q.indices.filter { it != current && it !in played }
+        if (pool.isEmpty()) pool = q.indices.filter { it != current }
+        if (pool.isEmpty()) return -1
+        val currentArtist = q.getOrNull(current)?.artist.orEmpty()
+        val prevArtist = q.getOrNull(played.dropLast(1).lastOrNull() ?: -1)?.artist.orEmpty()
+        // Prefer a different artist than the last two played.
+        val spread = pool.filter { q[it].artist != currentArtist && q[it].artist != prevArtist }
+        return (if (spread.isNotEmpty()) spread else pool).random()
+    }
+
+    // Planned shuffle target: computed once per track so the prefetched next item
+    // and an actual skip agree on where "next" is.
+    private var plannedShuffleNext: Int = -1
+
+    private fun computeNextIndex(q: List<Song>, i: Int): Int = when {
+        _repeat.value == 2 -> -1
+        _shuffle.value && q.size > 1 -> {
+            if (plannedShuffleNext !in q.indices || plannedShuffleNext == i) {
+                plannedShuffleNext = smartPick(q, i, if (i >= 0) shufflePlayed + i else shufflePlayed)
+            }
+            plannedShuffleNext
+        }
+        i + 1 < q.size -> i + 1
+        _repeat.value == 1 -> 0
+        else -> -1
+    }
+
     fun next() {
         val q = _queue.value
         if (q.isEmpty()) return
         val i = _queueIndex.value
         if (_repeat.value == 2) { playAt(i.coerceAtLeast(0)); return }
-        val target = when {
-            _shuffle.value && q.size > 1 -> smartShuffleNext(q, i)
-            i + 1 < q.size -> i + 1
-            _repeat.value == 1 -> 0
-            else -> -1
-        }
+        val target = computeNextIndex(q, i)
+        if (_shuffle.value && i >= 0 && i != target && i !in shufflePlayed) shufflePlayed.add(i)
+        plannedShuffleNext = -1
         if (target >= 0) playAt(target)
-    }
-
-    private fun smartShuffleNext(q: List<Song>, current: Int): Int {
-        if (current >= 0 && (shufflePlayed.isEmpty() || shufflePlayed.last() != current)) {
-            shufflePlayed.add(current)
-        }
-        var pool = q.indices.filter { it != current && it !in shufflePlayed }
-        if (pool.isEmpty()) {
-            // Full cycle done: start a fresh pass, keeping only the current song out.
-            shufflePlayed.clear()
-            if (current >= 0) shufflePlayed.add(current)
-            pool = q.indices.filter { it != current }
-        }
-        if (pool.isEmpty()) return -1
-        val currentArtist = q.getOrNull(current)?.artist.orEmpty()
-        val prevArtist = q.getOrNull(shufflePlayed.dropLast(1).lastOrNull() ?: -1)?.artist.orEmpty()
-        // Prefer a different artist than the last two played.
-        val spread = pool.filter { q[it].artist != currentArtist && q[it].artist != prevArtist }
-        return (if (spread.isNotEmpty()) spread else pool).random()
     }
 
     fun previous() {
@@ -182,19 +190,43 @@ class MusicPlayerController(
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                restoreCurrentSong()
+                val q = _queue.value
+                val idx = q.indexOfFirst { it.id == mediaItem?.mediaId }
+                if (idx >= 0) {
+                    val old = _queueIndex.value
+                    if (_shuffle.value && reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO &&
+                        old >= 0 && old != idx && old !in shufflePlayed) {
+                        shufflePlayed.add(old)
+                    }
+                    _queueIndex.value = idx
+                    _currentSong.value = q[idx]
+                } else {
+                    restoreCurrentSong()
+                }
+                plannedShuffleNext = -1
+                // Drop already-played items so the player playlist stays compact.
+                controller?.let { c ->
+                    while (c.mediaItemCount > 1 && c.currentMediaItemIndex > 0) c.removeMediaItem(0)
+                }
+                scheduleNextPrefetch()
             }
 
             override fun onPlayerError(error: PlaybackException) {
+                val song0 = _currentSong.value
+                if (pendingCandidates.isEmpty() && song0 != null) {
+                    prefetchAlts.remove(song0.id)?.let { pendingCandidates.addAll(it) }
+                }
                 val next = pendingCandidates.removeFirstOrNull()
-                val song = _currentSong.value
+                val song = song0
                 if (next != null && song != null) {
                     lastPlayError = describe(error)
                     playerScope.launch {
                         controller?.let { c ->
+                            playbackGeneration++
                             c.setMediaItem(buildItem(song, Uri.parse(next)))
                             c.prepare()
                             c.play()
+                            scheduleNextPrefetch()
                         }
                     }
                     return
@@ -248,6 +280,57 @@ class MusicPlayerController(
     private val pendingCandidates = ArrayDeque<String>()
     private var lastPlayError: String = ""
 
+    // ---- Gapless next-track pipeline ----
+    // Bumped on every fresh playback start; a stale prefetch job checks it before
+    // touching the player so it can never append an out-of-date track.
+    private var playbackGeneration = 0
+    private var prefetchJob: Job? = null
+    // Alternate stream URLs per song id, kept for the onPlayerError fallback when a
+    // prefetched item turns out to be a dead link at play time.
+    private val prefetchAlts = mutableMapOf<String, List<String>>()
+
+    /**
+     * Resolves the upcoming track's stream in the background and appends it to the
+     * ExoPlayer playlist while the current song is still playing. ExoPlayer then
+     * prebuffers and auto-advances with no audible gap, instead of starting the
+     * network resolve only after STATE_ENDED.
+     */
+    private fun scheduleNextPrefetch() {
+        prefetchJob?.cancel()
+        val q = _queue.value
+        val i = _queueIndex.value
+        if (i !in q.indices) return
+        val gen = playbackGeneration
+        val target = computeNextIndex(q, i)
+        if (target < 0) return
+        val nextSong = q[target]
+        prefetchJob = playerScope.launch {
+            try {
+                val url: String = when {
+                    nextSong.isDownloaded && !nextSong.localFilePath.isNullOrEmpty() &&
+                        File(nextSong.localFilePath!!).isFile && File(nextSong.localFilePath!!).length() > 0 ->
+                        "file://${nextSong.localFilePath}"
+                    !nextSong.streamUrl.isNullOrEmpty() -> nextSong.streamUrl!!
+                    else -> {
+                        val all = extractor.resolveAudioCandidates(nextSong.id)
+                        if (all.isEmpty()) return@launch
+                        prefetchAlts[nextSong.id] = all.drop(1).take(4)
+                        nextSong.streamUrl = all[0]
+                        all[0]
+                    }
+                }
+                if (gen != playbackGeneration) return@launch
+                val c = controller ?: return@launch
+                if (c.mediaItemCount == 1 && c.currentMediaItem?.mediaId == q[i].id) {
+                    c.addMediaItem(buildItem(nextSong, Uri.parse(url)))
+                }
+            } catch (e: Exception) {
+                // Prefetch is best-effort: the STATE_ENDED -> next() path still
+                // resolves and starts the next track if we never appended it.
+            }
+        }
+    }
+
     private fun describe(e: PlaybackException): String {
         var c: Throwable? = e.cause
         val parts = mutableListOf(e.errorCodeName)
@@ -281,6 +364,8 @@ class MusicPlayerController(
     }
 
     private fun startPlayback(song: Song) {
+        playbackGeneration++
+        prefetchJob?.cancel()
         playerScope.launch {
             _errorMessage.value = null
             _isBuffering.value = true
@@ -321,6 +406,7 @@ class MusicPlayerController(
                 player.setMediaItem(mediaItem)
                 player.prepare()
                 player.play()
+                scheduleNextPrefetch()
             }
         }
     }
