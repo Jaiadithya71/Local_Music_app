@@ -4,6 +4,11 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+# Serialise runs: parallel builds race on deleting/creating the same v1.0.1
+# release and lose with HTTP 403. Queued, each push still gets its own run.
+concurrency:
+  group: build-apk-main
+  cancel-in-progress: false
 jobs:
   build:
     runs-on: ubuntu-24.04
@@ -52,4 +57,12 @@ jobs:
         run: |
           cp android/app/build/outputs/apk/debug/app-debug.apk VibeStream-debug.apk
           gh release delete v1.0.1 --yes --cleanup-tag || true
-          gh release create v1.0.1 VibeStream-debug.apk --target "$GITHUB_SHA" --title "v1.0.1 debug (fixes compiled)" --notes "Debug APK built by CI from the commit with the service playback and verified download fixes. Personal sideload only."
+          for attempt in 1 2 3; do
+            if gh release create v1.0.1 VibeStream-debug.apk --target "$GITHUB_SHA" --title "v1.0.1 debug (fixes compiled)" --notes "Debug APK built by CI. Personal sideload only."; then
+              break
+            fi
+            echo "release create attempt $attempt failed; retrying in 20s"
+            sleep 20
+            gh release delete v1.0.1 --yes --cleanup-tag || true
+          done
+          gh release view v1.0.1 --json tagName --jq .tagName
