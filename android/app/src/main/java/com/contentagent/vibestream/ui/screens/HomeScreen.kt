@@ -92,7 +92,8 @@ fun HomeScreen(
     val repeatMode by playerController.repeat.collectAsState()
     var showQueue by remember { mutableStateOf(false) }
     var addToPlaylistSong by remember { mutableStateOf<Song?>(null) }
-    val tasteStore = remember { com.contentagent.vibestream.data.local.TasteStore(androidx.compose.ui.platform.LocalContext.current) }
+    val appCtx = androidx.compose.ui.platform.LocalContext.current
+    val tasteStore = remember { com.contentagent.vibestream.data.local.TasteStore(appCtx) }
     var musicOnly by remember { mutableStateOf(tasteStore.getMusicOnly()) }
     LaunchedEffect(currentSong?.id) {
         currentSong?.let { library.addRecent(it) }
