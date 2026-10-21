@@ -11,7 +11,7 @@ android {
         applicationId = "com.contentagent.vibestream"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
+        versionCode = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
         versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -20,7 +20,26 @@ android {
         }
     }
 
+    // CI signs debug builds with the persistent keystore from repo secrets so each
+    // new APK installs as an in-place update instead of conflicting on signature.
+    // Locally (no env vars) the normal debug key is used.
+    signingConfigs {
+        create("ci") {
+            val ksPath = System.getenv("KEYSTORE_PATH")
+            if (!ksPath.isNullOrEmpty()) {
+                storeFile = file(ksPath)
+                storePassword = System.getenv("KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("KEY_ALIAS") ?: "vibestream"
+                keyPassword = System.getenv("KEYSTORE_PASSWORD")
+            }
+        }
+    }
     buildTypes {
+        debug {
+            if (!System.getenv("KEYSTORE_PATH").isNullOrEmpty()) {
+                signingConfig = signingConfigs.getByName("ci")
+            }
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
