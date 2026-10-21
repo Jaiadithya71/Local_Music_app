@@ -41,7 +41,8 @@ fun HomeScreen(
     offlineStorage: OfflineStorage,
     downloadManager: DownloadManager,
     playerController: MusicPlayerController,
-    library: com.contentagent.vibestream.data.local.LibraryStore
+    library: com.contentagent.vibestream.data.local.LibraryStore,
+    onEditTaste: () -> Unit = {}
 ) {
     val coroutineScope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
@@ -538,6 +539,7 @@ fun HomeScreen(
                     recent = recentSongs,
                     liked = likedSongs,
                     playlists = userPlaylists,
+                    onEditTaste = onEditTaste,
                     onPlayMood = { q ->
                         playerController.setShuffle(true)
                         playerController.playSong(q.first(), q)

@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -58,9 +59,10 @@ private fun saveMoodMix(ctx: android.content.Context, songs: List<Song>) {
 private fun buildMoodMix(
     liked: List<Song>,
     recent: List<Song>,
-    playlists: List<com.contentagent.vibestream.data.local.Playlist>
+    playlists: List<com.contentagent.vibestream.data.local.Playlist>,
+    seedQueries: List<String>
 ): List<Song> {
-    val genreSongs = mixSeedQueries.flatMap { ShelfCache.data[it] ?: emptyList() }
+    val genreSongs = seedQueries.flatMap { ShelfCache.data[it] ?: emptyList() }
     return (liked + recent + playlists.flatMap { it.songs } + genreSongs)
         .distinctBy { it.id }
         .take(50)
@@ -109,7 +111,8 @@ fun HomeShelves(
     recent: List<Song> = emptyList(),
     liked: List<Song> = emptyList(),
     playlists: List<com.contentagent.vibestream.data.local.Playlist> = emptyList(),
-    onPlayMood: (List<Song>) -> Unit = {}
+    onPlayMood: (List<Song>) -> Unit = {},
+    onEditTaste: () -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
     val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -117,22 +120,31 @@ fun HomeShelves(
     val topArtist = (liked + recent).groupingBy { it.artist }.eachCount()
         .filterKeys { it.isNotBlank() && it != "Unknown Artist" && it != "YouTube" }
         .maxByOrNull { it.value }?.key
+    // Taste onboarding answers seed the shelves; defaults when skipped.
+    val profile = remember { com.contentagent.vibestream.data.local.TasteStore(ctx).load() }
+    val tasteShelves = profile.languages.take(2).map { "$it hits" to "$it hit songs" } +
+        profile.moods.take(2).map { it to "$it songs" }
     val shelfList = remember(topArtist) {
-        val first = if (topArtist != null) "Top picks for you" to "$topArtist songs" else shelves[0]
-        listOf(first) + shelves.drop(1)
+        val topQuery = when {
+            topArtist != null -> "$topArtist songs"
+            profile.artists.isNotEmpty() -> "${profile.artists.first()} songs"
+            else -> "trending songs"
+        }
+        listOf("Top picks for you" to topQuery) + tasteShelves.ifEmpty { shelves.drop(1) }
     }
+    val seedQueries = (shelfList.map { it.second } + mixSeedQueries).distinct()
     var moodMix by remember { mutableStateOf(restoreMoodMix(ctx)) }
     // Show cached shelves instantly, then refresh one at a time in the background.
     LaunchedEffect(shelfList) {
         restoreShelves(ctx, shelfList.map { it.second })
         for ((_, q) in shelfList) loadShelf(ctx, extractor, q)
-        for (q in mixSeedQueries) if (ShelfCache.data[q] == null) loadShelf(ctx, extractor, q)
-        moodMix = buildMoodMix(liked, recent, playlists)
+        for (q in seedQueries) if (ShelfCache.data[q] == null) loadShelf(ctx, extractor, q)
+        moodMix = buildMoodMix(liked, recent, playlists, seedQueries)
         if (moodMix.isNotEmpty()) saveMoodMix(ctx, moodMix)
     }
     // Keep the mix in step with his library without hitting the network.
     LaunchedEffect(liked.size, recent.size, playlists.size) {
-        val rebuilt = buildMoodMix(liked, recent, playlists)
+        val rebuilt = buildMoodMix(liked, recent, playlists, seedQueries)
         if (rebuilt.isNotEmpty()) {
             moodMix = rebuilt
             saveMoodMix(ctx, rebuilt)
@@ -163,11 +175,22 @@ fun HomeShelves(
                         )
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            "Your Tamil, Hindi, philosophical and retro mix",
+                            if (profile.languages.isNotEmpty() || profile.moods.isNotEmpty())
+                                "A mix from your taste: " + (profile.languages + profile.moods).take(4).joinToString(", ")
+                            else "Your Tamil, Hindi, philosophical and retro mix",
                             color = TextSecondary,
                             fontSize = 13.sp
                         )
                     }
+                    androidx.compose.material3.IconButton(onClick = onEditTaste) {
+                        androidx.compose.material3.Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Edit taste",
+                            tint = TextSecondary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
                     Box(
                         modifier = Modifier
                             .size(56.dp)

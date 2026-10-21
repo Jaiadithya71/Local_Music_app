@@ -8,7 +8,13 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import com.contentagent.vibestream.data.extractor.YouTubeExtractor
 import com.contentagent.vibestream.data.local.DownloadManager
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import com.contentagent.vibestream.data.local.LibraryStore
+import com.contentagent.vibestream.data.local.TasteStore
+import com.contentagent.vibestream.ui.screens.OnboardingScreen
 import com.contentagent.vibestream.data.local.OfflineStorage
 import com.contentagent.vibestream.player.MusicPlayerController
 import com.contentagent.vibestream.ui.screens.HomeScreen
@@ -43,13 +49,20 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = DarkBackground
                 ) {
-                    HomeScreen(
-                        extractor = extractor,
-                        offlineStorage = offlineStorage,
-                        downloadManager = downloadManager,
-                        playerController = playerController,
-                        library = library
-                    )
+                    val tasteStore = remember { TasteStore(applicationContext) }
+                    var showOnboarding by remember { mutableStateOf(!tasteStore.isDone()) }
+                    if (showOnboarding) {
+                        OnboardingScreen(store = tasteStore, onDone = { showOnboarding = false })
+                    } else {
+                        HomeScreen(
+                            extractor = extractor,
+                            offlineStorage = offlineStorage,
+                            downloadManager = downloadManager,
+                            playerController = playerController,
+                            library = library,
+                            onEditTaste = { showOnboarding = true }
+                        )
+                    }
                 }
             }
         }
