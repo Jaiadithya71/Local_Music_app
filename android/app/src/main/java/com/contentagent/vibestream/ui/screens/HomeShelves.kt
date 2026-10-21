@@ -18,6 +18,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import kotlinx.coroutines.launch
 import com.contentagent.vibestream.data.extractor.YouTubeExtractor
 import com.contentagent.vibestream.data.model.Song
 import com.contentagent.vibestream.ui.theme.*
@@ -30,6 +31,23 @@ private val shelves = listOf(
     "Workout" to "workout songs"
 )
 
+private object ShelfCache {
+    val data = mutableStateMapOf<String, List<Song>>()
+    val failed = mutableStateMapOf<String, Boolean>()
+}
+
+private suspend fun loadShelf(extractor: YouTubeExtractor, query: String) {
+    ShelfCache.failed.remove(query)
+    var result: List<Song> = emptyList()
+    for (attempt in 1..2) {
+        result = try {
+            kotlinx.coroutines.withTimeout(20_000) { extractor.searchSongs(query) }
+        } catch (e: Exception) { emptyList() }
+        if (result.isNotEmpty()) break
+    }
+    if (result.isNotEmpty()) ShelfCache.data[query] = result.take(12) else ShelfCache.failed[query] = true
+}
+
 /** Amazon Music style Home: titled horizontal shelves of square cards. */
 @Composable
 fun HomeShelves(
@@ -39,6 +57,13 @@ fun HomeShelves(
     onSeeAll: (String) -> Unit,
     recent: List<Song> = emptyList()
 ) {
+    val scope = rememberCoroutineScope()
+    // Load shelves one at a time so they do not fail together under load.
+    LaunchedEffect(Unit) {
+        for ((_, q) in shelves) {
+            if (ShelfCache.data[q] == null) loadShelf(extractor, q)
+        }
+    }
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
         if (recent.isNotEmpty()) {
             item {
@@ -73,10 +98,8 @@ fun HomeShelves(
             }
         }
         items(shelves) { (title, query) ->
-            var songs by remember(query) { mutableStateOf<List<Song>?>(null) }
-            LaunchedEffect(query) {
-                songs = try { extractor.searchSongs(query).take(12) } catch (e: Exception) { emptyList() }
-            }
+            val songs = ShelfCache.data[query]
+            val failed = ShelfCache.failed[query] == true
             Column(modifier = Modifier.padding(top = 16.dp)) {
                 Text(
                     text = title,
@@ -90,7 +113,16 @@ fun HomeShelves(
                 val list = songs
                 if (list == null) {
                     Box(modifier = Modifier.fillMaxWidth().height(150.dp), contentAlignment = androidx.compose.ui.Alignment.Center) {
-                        CircularProgressIndicator(color = AmberOrange, modifier = Modifier.size(24.dp))
+                        if (failed) {
+                            Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+                                Text("Could not load this shelf", color = TextSecondary, fontSize = 13.sp)
+                                androidx.compose.material3.TextButton(onClick = { scope.launch { loadShelf(extractor, query) } }) {
+                                    Text("Retry", color = AmberOrange)
+                                }
+                            }
+                        } else {
+                            CircularProgressIndicator(color = AmberOrange, modifier = Modifier.size(24.dp))
+                        }
                     }
                 } else {
                     LazyRow(
