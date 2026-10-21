@@ -186,59 +186,99 @@ fun HomeShelves(
                 )
             }
         }
-        if (moodMix.isNotEmpty()) {
+        val mixDefs: List<Triple<String, String, String>> =
+            if (profile.languages.isNotEmpty() || profile.moods.isNotEmpty()) {
+                profile.languages.take(2).map { Triple("$it mix", "Hits and fresh picks", "$it hit songs") } +
+                    profile.moods.take(2).map { Triple("$it mix", "Made for your mood", "$it songs") }
+            } else {
+                listOf(
+                    Triple("Tamil mix", "Hits and fresh picks", "tamil hit songs"),
+                    Triple("Hindi mix", "Hits and fresh picks", "bollywood hit songs"),
+                    Triple("Philosophical mix", "Made for your mood", "tamil philosophical songs"),
+                    Triple("Retro mix", "Made for your mood", "retro classic songs")
+                )
+            }
+        // One card per mix: "Your mood" first, then the named mixes. Each is its own
+        // shuffled queue, like Spotify's Made For You hub.
+        val namedMixes: List<Triple<String, String, List<Song>>> = run {
+            val out = mutableListOf<Triple<String, String, List<Song>>>()
+            if (moodMix.isNotEmpty()) {
+                out.add(Triple("Your mood", "Your Tamil, Hindi, philosophical and retro mix", moodMix))
+            }
+            for ((name, sub, q) in mixDefs) {
+                val base = ShelfCache.data[cacheKey(q, musicOnly)] ?: continue
+                val songs = (base + liked + recent).distinctBy { it.id }.take(50)
+                if (songs.size >= 5) out.add(Triple(name, sub, songs))
+            }
+            out
+        }
+        if (namedMixes.isNotEmpty()) {
             item {
-                Row(
-                    modifier = Modifier
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(DarkSurfaceElevated)
-                        .clickable {
-                            val q = moodMix.shuffled()
-                            onPlayMood(q)
-                        }
-                        .padding(16.dp),
-                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            "Your mood",
-                            color = TextPrimary,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            if (profile.languages.isNotEmpty() || profile.moods.isNotEmpty())
-                                "A mix from your taste: " + (profile.languages + profile.moods).take(4).joinToString(", ")
-                            else "Your Tamil, Hindi, philosophical and retro mix",
-                            color = TextSecondary,
-                            fontSize = 13.sp
-                        )
-                    }
-                    androidx.compose.material3.IconButton(onClick = onEditTaste) {
-                        androidx.compose.material3.Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = "Edit taste",
-                            tint = TextSecondary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    Box(
-                        modifier = Modifier
-                            .size(56.dp)
-                            .clip(RoundedCornerShape(28.dp))
-                            .background(AmberOrange),
-                        contentAlignment = androidx.compose.ui.Alignment.Center
+                Column(modifier = Modifier.padding(top = 12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
                     ) {
-                        androidx.compose.material3.Icon(
-                            imageVector = Icons.Default.PlayArrow,
-                            contentDescription = "Play your mood mix",
-                            tint = androidx.compose.ui.graphics.Color.Black,
-                            modifier = Modifier.size(32.dp)
+                        Text(
+                            "Made for you",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = TextPrimary,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f)
                         )
+                        androidx.compose.material3.IconButton(onClick = onEditTaste) {
+                            androidx.compose.material3.Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Edit taste",
+                                tint = TextSecondary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(namedMixes.size) { i ->
+                            val (name, sub, songs) = namedMixes[i]
+                            val palette = listOf(
+                                AmberOrange,
+                                androidx.compose.ui.graphics.Color(0xFF7C4DFF),
+                                androidx.compose.ui.graphics.Color(0xFF00897B),
+                                androidx.compose.ui.graphics.Color(0xFFE53935),
+                                androidx.compose.ui.graphics.Color(0xFF3949AB)
+                            )
+                            Column(
+                                modifier = Modifier
+                                    .width(150.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(palette[i % palette.size].copy(alpha = 0.85f))
+                                    .clickable { onPlayMood(songs.shuffled()) }
+                                    .padding(14.dp)
+                            ) {
+                                Text(name, color = androidx.compose.ui.graphics.Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Spacer(Modifier.height(4.dp))
+                                Text(sub, color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.8f), fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                Spacer(Modifier.height(18.dp))
+                                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                                    Text("${songs.size} songs", color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.8f), fontSize = 11.sp, modifier = Modifier.weight(1f))
+                                    Box(
+                                        modifier = Modifier
+                                            .size(34.dp)
+                                            .clip(RoundedCornerShape(17.dp))
+                                            .background(androidx.compose.ui.graphics.Color.White),
+                                        contentAlignment = androidx.compose.ui.Alignment.Center
+                                    ) {
+                                        androidx.compose.material3.Icon(
+                                            imageVector = Icons.Default.PlayArrow,
+                                            contentDescription = "Play $name",
+                                            tint = androidx.compose.ui.graphics.Color.Black,
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
