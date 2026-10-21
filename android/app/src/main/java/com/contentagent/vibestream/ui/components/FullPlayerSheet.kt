@@ -37,7 +37,10 @@ fun FullPlayerSheet(
     onSkipForward: () -> Unit,
     onSkipBackward: () -> Unit,
     onDownloadClick: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    isLiked: Boolean = false,
+    onToggleLike: () -> Unit = {},
+    onAddToPlaylist: () -> Unit = {}
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -85,54 +88,32 @@ fun FullPlayerSheet(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Title & Artist
-            Text(
-                text = song.title,
-                color = TextPrimary,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            Text(
-                text = song.artist,
-                color = TextSecondary,
-                fontSize = 15.sp,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Storage Source Badge (Online Stream vs Offline File)
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = if (isDownloaded) SuccessGreen.copy(alpha = 0.15f) else AmberOrange.copy(alpha = 0.15f),
-                border = CardDefaults.outlinedCardBorder().copy(
-                    brush = androidx.compose.ui.graphics.SolidColor(if (isDownloaded) SuccessGreen else AmberOrange)
-                )
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = if (isDownloaded) Icons.Default.CheckCircle else Icons.Default.CloudQueue,
-                        contentDescription = null,
-                        tint = if (isDownloaded) SuccessGreen else AmberOrange,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
+            // Title, artist and like
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = if (isDownloaded) "Playing from Local Storage (Offline)" else "Streaming Live via YouTube Pipeline",
-                        color = if (isDownloaded) SuccessGreen else AmberOrange,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium
+                        text = song.title,
+                        color = TextPrimary,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = if (isDownloaded) "${song.artist}  ·  Offline" else song.artist,
+                        color = TextSecondary,
+                        fontSize = 15.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                IconButton(onClick = onToggleLike) {
+                    Icon(
+                        imageVector = if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = if (isLiked) "Unlike" else "Like",
+                        tint = if (isLiked) AmberOrange else TextSecondary,
+                        modifier = Modifier.size(28.dp)
                     )
                 }
             }
@@ -264,14 +245,20 @@ fun FullPlayerSheet(
                     )
                 }
 
-                // Close Sheet
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onAddToPlaylist) {
+                    Icon(Icons.Default.PlaylistAdd, contentDescription = "Add to playlist", tint = TextSecondary, modifier = Modifier.size(28.dp))
+                }
                 IconButton(onClick = onDismiss) {
-                    Icon(
-                        imageVector = Icons.Default.KeyboardArrowDown,
-                        contentDescription = "Collapse Player",
-                        tint = TextSecondary,
-                        modifier = Modifier.size(30.dp)
-                    )
+                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Collapse player", tint = TextSecondary, modifier = Modifier.size(30.dp))
                 }
             }
         }

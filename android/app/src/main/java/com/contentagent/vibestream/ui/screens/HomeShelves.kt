@@ -36,9 +36,42 @@ fun HomeShelves(
     extractor: YouTubeExtractor,
     currentSongId: String?,
     onPlay: (Song) -> Unit,
-    onSeeAll: (String) -> Unit
+    onSeeAll: (String) -> Unit,
+    recent: List<Song> = emptyList()
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
+        if (recent.isNotEmpty()) {
+            item {
+                Column(modifier = Modifier.padding(top = 16.dp)) {
+                    Text(
+                        text = "Recently played",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = TextPrimary,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(recent.take(12), key = { it.id }) { song ->
+                            Column(modifier = Modifier.width(140.dp).clickable { onPlay(song) }) {
+                                AsyncImage(
+                                    model = song.thumbnailUrl.ifEmpty { "https://i.ytimg.com/vi/${song.id}/hqdefault.jpg" },
+                                    contentDescription = song.title,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.size(140.dp).clip(RoundedCornerShape(6.dp))
+                                )
+                                Spacer(Modifier.height(6.dp))
+                                Text(song.title, color = if (song.id == currentSongId) AmberOrange else TextPrimary,
+                                    fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                Text(song.artist, color = TextSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
+                    }
+                }
+            }
+        }
         items(shelves) { (title, query) ->
             var songs by remember(query) { mutableStateOf<List<Song>?>(null) }
             LaunchedEffect(query) {

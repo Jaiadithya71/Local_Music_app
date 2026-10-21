@@ -40,7 +40,8 @@ fun HomeScreen(
     extractor: YouTubeExtractor,
     offlineStorage: OfflineStorage,
     downloadManager: DownloadManager,
-    playerController: MusicPlayerController
+    playerController: MusicPlayerController,
+    library: com.contentagent.vibestream.data.local.LibraryStore
 ) {
     val coroutineScope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
@@ -53,20 +54,6 @@ fun HomeScreen(
     var searchSuggestions by remember { mutableStateOf<List<String>>(emptyList()) }
     var showSuggestions by remember { mutableStateOf(false) }
     var isPlayerSheetVisible by remember { mutableStateOf(false) }
-
-    // The first screen shows actual upstream search metadata, or an empty/error state.
-    LaunchedEffect(Unit) {
-        isSearching = true
-        try {
-            val results = extractor.searchSongs("Tamil music")
-            searchResults = results
-            if (results.isEmpty()) searchError = "Music search is unavailable. Try searching again."
-        } catch (e: Exception) {
-            searchError = "Music search failed: ${e.localizedMessage}"
-        } finally {
-            isSearching = false
-        }
-    }
 
     // Real-time search recommendation autocomplete as user types
     LaunchedEffect(searchQuery) {
@@ -94,6 +81,13 @@ fun HomeScreen(
     val currentPosition by playerController.currentPosition.collectAsState()
     val duration by playerController.duration.collectAsState()
     val playerError by playerController.errorMessage.collectAsState()
+    val likedSongs by library.liked.collectAsState()
+    val recentSongs by library.recent.collectAsState()
+    var librarySection by remember { mutableStateOf(0) } // 0 downloads, 1 liked, 2 playlists, 3 recent
+    var addToPlaylistSong by remember { mutableStateOf<Song?>(null) }
+    LaunchedEffect(currentSong?.id) {
+        currentSong?.let { library.addRecent(it) }
+    }
 
     fun performSearch(query: String) {
         if (query.isBlank()) return
@@ -378,38 +372,7 @@ fun HomeScreen(
                             }
                         }
                         searchResults.isEmpty() -> {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    modifier = Modifier.padding(32.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Headphones,
-                                        contentDescription = null,
-                                        tint = DarkSurfaceBorder,
-                                        modifier = Modifier.size(64.dp)
-                                    )
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                    Text(
-                                        text = "Search & Stream Any Song",
-                                        color = TextPrimary,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 16.sp
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = "Type an artist or track above to stream directly from YouTube or tap download to save offline.",
-                                        color = TextTertiary,
-                                        fontSize = 13.sp,
-                                        textAlign = TextAlign.Center
-                                    )
-                                }
-                            }
+                            CategoryTiles(onPick = { q -> searchQuery = q; performSearch(q) })
                         }
                         else -> {
                             LazyColumn(
@@ -450,8 +413,41 @@ fun HomeScreen(
                     }
                 }
             } else if (selectedTab == 2) {
+              Column(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val names = listOf("Downloads", "Liked (${likedSongs.size})", "Playlists", "Recent")
+                    for ((i, n) in names.withIndex()) {
+                        FilterChip(
+                            selected = librarySection == i,
+                            onClick = { librarySection = i },
+                            label = { Text(n, fontSize = 12.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                containerColor = DarkSurfaceElevated,
+                                labelColor = TextSecondary,
+                                selectedContainerColor = AmberOrange,
+                                selectedLabelColor = DarkBackground
+                            )
+                        )
+                    }
+                }
+                if (librarySection != 0) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        LibrarySection(
+                            section = librarySection,
+                            library = library,
+                            currentSongId = currentSong?.id,
+                            onPlay = { playerController.playSong(offlineStorage.getLocalSong(it.id) ?: it) }
+                        )
+                    }
+                } else
                 // DOWNLOADS / OFFLINE TAB
-                Column(modifier = Modifier.fillMaxSize()) {
+                Column(modifier = Modifier.fillMaxWidth().weight(1f)) {
                     if (downloadedSongs.isEmpty()) {
                         Box(
                             modifier = Modifier
@@ -530,8 +526,10 @@ fun HomeScreen(
                         }
                     }
                 }
+              }
             } else {
                 HomeShelves(
+                    recent = recentSongs,
                     extractor = extractor,
                     currentSongId = currentSong?.id,
                     onPlay = { playerController.playSong(it) },
@@ -566,7 +564,13 @@ fun HomeScreen(
                     downloadManager.downloadTrack(song)
                 }
             },
+            isLiked = likedSongs.any { it.id == song.id },
+            onToggleLike = { library.toggleLike(song) },
+            onAddToPlaylist = { addToPlaylistSong = song },
             onDismiss = { isPlayerSheetVisible = false }
         )
+    }
+    addToPlaylistSong?.let { sg ->
+        AddToPlaylistDialog(library = library, song = sg, onDismiss = { addToPlaylistSong = null })
     }
 }

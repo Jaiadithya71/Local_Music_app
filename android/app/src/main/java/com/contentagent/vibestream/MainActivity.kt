@@ -8,6 +8,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import com.contentagent.vibestream.data.extractor.YouTubeExtractor
 import com.contentagent.vibestream.data.local.DownloadManager
+import com.contentagent.vibestream.data.local.LibraryStore
 import com.contentagent.vibestream.data.local.OfflineStorage
 import com.contentagent.vibestream.player.MusicPlayerController
 import com.contentagent.vibestream.ui.screens.HomeScreen
@@ -22,6 +23,7 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var extractor: YouTubeExtractor
     private lateinit var offlineStorage: OfflineStorage
+    private lateinit var library: LibraryStore
     private lateinit var downloadManager: DownloadManager
     private lateinit var playerController: MusicPlayerController
 
@@ -31,6 +33,7 @@ class MainActivity : ComponentActivity() {
         // Initialize on-device components (zero external server required)
         extractor = YouTubeExtractor()
         offlineStorage = OfflineStorage(applicationContext)
+        library = LibraryStore(applicationContext)
         downloadManager = DownloadManager(applicationContext, extractor, offlineStorage)
         playerController = MusicPlayerController(applicationContext, extractor)
 
@@ -44,7 +47,8 @@ class MainActivity : ComponentActivity() {
                         extractor = extractor,
                         offlineStorage = offlineStorage,
                         downloadManager = downloadManager,
-                        playerController = playerController
+                        playerController = playerController,
+                        library = library
                     )
                 }
             }
