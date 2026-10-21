@@ -84,7 +84,10 @@ class MusicPlayerController(
     private val _repeat = MutableStateFlow(0) // 0 off, 1 all, 2 one
     val repeat: StateFlow<Int> = _repeat.asStateFlow()
 
-    fun toggleShuffle() { _shuffle.value = !_shuffle.value }
+    fun toggleShuffle() {
+        _shuffle.value = !_shuffle.value
+        shufflePlayed.clear()
+    }
     fun setShuffle(on: Boolean) { _shuffle.value = on }
     fun cycleRepeat() { _repeat.value = (_repeat.value + 1) % 3 }
 
@@ -95,22 +98,42 @@ class MusicPlayerController(
         startPlayback(q[index])
     }
 
+    // Smart shuffle: tracks already played in this shuffle pass are not repeated
+    // until the queue has cycled, and consecutive songs avoid the same artist when
+    // the queue has alternatives (artist spread, like Spotify's smart shuffle feel).
+    private val shufflePlayed = mutableListOf<Int>()
+
     fun next() {
         val q = _queue.value
         if (q.isEmpty()) return
         val i = _queueIndex.value
         if (_repeat.value == 2) { playAt(i.coerceAtLeast(0)); return }
         val target = when {
-            _shuffle.value && q.size > 1 -> {
-                var r = q.indices.random()
-                while (r == i) r = q.indices.random()
-                r
-            }
+            _shuffle.value && q.size > 1 -> smartShuffleNext(q, i)
             i + 1 < q.size -> i + 1
             _repeat.value == 1 -> 0
             else -> -1
         }
         if (target >= 0) playAt(target)
+    }
+
+    private fun smartShuffleNext(q: List<Song>, current: Int): Int {
+        if (current >= 0 && (shufflePlayed.isEmpty() || shufflePlayed.last() != current)) {
+            shufflePlayed.add(current)
+        }
+        var pool = q.indices.filter { it != current && it !in shufflePlayed }
+        if (pool.isEmpty()) {
+            // Full cycle done: start a fresh pass, keeping only the current song out.
+            shufflePlayed.clear()
+            if (current >= 0) shufflePlayed.add(current)
+            pool = q.indices.filter { it != current }
+        }
+        if (pool.isEmpty()) return -1
+        val currentArtist = q.getOrNull(current)?.artist.orEmpty()
+        val prevArtist = q.getOrNull(shufflePlayed.dropLast(1).lastOrNull() ?: -1)?.artist.orEmpty()
+        // Prefer a different artist than the last two played.
+        val spread = pool.filter { q[it].artist != currentArtist && q[it].artist != prevArtist }
+        return (if (spread.isNotEmpty()) spread else pool).random()
     }
 
     fun previous() {
@@ -246,6 +269,7 @@ class MusicPlayerController(
     }
 
     fun playSong(song: Song, context: List<Song>? = null) {
+        shufflePlayed.clear()
         if (context != null && context.any { it.id == song.id }) {
             _queue.value = context
             _queueIndex.value = context.indexOfFirst { it.id == song.id }
