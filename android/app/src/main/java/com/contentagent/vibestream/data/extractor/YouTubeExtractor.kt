@@ -138,7 +138,8 @@ class YouTubeExtractor {
                         Song(
                             id = id, title = title, artist = artist,
                             durationSec = dur, durationText = formatDuration(dur),
-                            thumbnailUrl = "https://i.ytimg.com/vi/$id/hqdefault.jpg"
+                            thumbnailUrl = "https://i.ytimg.com/vi/$id/hqdefault.jpg",
+                            kind = "video"
                         )
                     )
                 }

@@ -20,7 +20,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import coil.compose.AsyncImage
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.contentagent.vibestream.data.extractor.YouTubeExtractor
@@ -95,6 +99,7 @@ fun HomeScreen(
     val appCtx = androidx.compose.ui.platform.LocalContext.current
     val tasteStore = remember { com.contentagent.vibestream.data.local.TasteStore(appCtx) }
     var musicOnly by remember { mutableStateOf(tasteStore.getMusicOnly()) }
+    var resultFilter by remember { mutableStateOf("all") }
     LaunchedEffect(currentSong?.id) {
         currentSong?.let { library.addRecent(it) }
     }
@@ -105,6 +110,7 @@ fun HomeScreen(
         showSuggestions = false
         isSearching = true
         searchError = null
+        resultFilter = "all"
 
         coroutineScope.launch {
             try {
@@ -413,14 +419,74 @@ fun HomeScreen(
                             CategoryTiles(onPick = { q -> searchQuery = q; performSearch(q) })
                         }
                         else -> {
+                          val filtered = when (resultFilter) {
+                              "song" -> searchResults.filter { it.kind == "song" }
+                              "video" -> searchResults.filter { it.kind == "video" }
+                              else -> searchResults
+                          }
+                          Column(modifier = Modifier.fillMaxWidth().weight(1f)) {
                             LazyColumn(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f),
+                                modifier = Modifier.fillMaxWidth().weight(1f),
                                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                items(searchResults, key = { it.id }) { song ->
+                                // Spotify-style top result hero
+                                item {
+                                    val top = searchResults.first()
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(DarkSurfaceElevated)
+                                            .clickable { playerController.playSong(top, searchResults) }
+                                            .padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        AsyncImage(
+                                            model = top.thumbnailUrl.ifEmpty { "https://i.ytimg.com/vi/${top.id}/hqdefault.jpg" },
+                                            contentDescription = top.title,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.size(96.dp).clip(RoundedCornerShape(8.dp))
+                                        )
+                                        Spacer(Modifier.width(12.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text("Top result", color = TextTertiary, fontSize = 11.sp)
+                                            Text(
+                                                top.title, color = TextPrimary, fontSize = 15.sp,
+                                                fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis
+                                            )
+                                            Text(
+                                                top.artist, color = TextSecondary, fontSize = 13.sp,
+                                                maxLines = 1, overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                        Icon(
+                                            Icons.Default.PlayCircle,
+                                            contentDescription = "Play",
+                                            tint = AmberOrange,
+                                            modifier = Modifier.size(40.dp)
+                                        )
+                                    }
+                                }
+                                // Type filter chips (Songs = YouTube Music, Videos = YouTube-wide)
+                                item {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        for ((key, label) in listOf("all" to "All", "song" to "Songs", "video" to "Videos")) {
+                                            FilterChip(
+                                                selected = resultFilter == key,
+                                                onClick = { resultFilter = key },
+                                                label = { Text(label, fontSize = 12.sp) },
+                                                colors = FilterChipDefaults.filterChipColors(
+                                                    containerColor = DarkSurfaceElevated,
+                                                    labelColor = TextSecondary,
+                                                    selectedContainerColor = AmberOrange,
+                                                    selectedLabelColor = DarkBackground
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
+                                items(filtered, key = { it.id }) { song ->
                                     val isCurrent = currentSong?.id == song.id
                                     val isDownloaded = offlineStorage.isDownloaded(song.id)
                                     val isDownloading = downloadManager.isDownloading(song.id)
@@ -447,6 +513,7 @@ fun HomeScreen(
                                     )
                                 }
                             }
+                          }
                         }
                     }
                 }

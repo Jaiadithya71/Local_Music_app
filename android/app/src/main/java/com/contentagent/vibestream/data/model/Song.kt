@@ -12,6 +12,7 @@ data class Song(
     var streamUrl: String? = null,
     var localFilePath: String? = null,
     var isDownloaded: Boolean = false,
+    val kind: String = "song", // "song" (YouTube Music) or "video" (YouTube-wide)
     var isDownloading: Boolean = false,
     var downloadProgress: Float = 0f
 ) : Serializable {
