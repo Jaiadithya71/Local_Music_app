@@ -37,8 +37,18 @@ class PlaybackService : MediaSessionService() {
                     .build()
             } else spec
         }
+        // Let ExoPlayer own audio focus: calls, alarms and other apps taking focus
+        // pause playback (and resume after a transient loss), a permanent focus
+        // loss stops it, and yanking headphones pauses instead of blasting
+        // through the speaker.
+        val audioAttrs = androidx.media3.common.AudioAttributes.Builder()
+            .setUsage(androidx.media3.common.C.USAGE_MEDIA)
+            .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MUSIC)
+            .build()
         val player = ExoPlayer.Builder(this)
             .setMediaSourceFactory(DefaultMediaSourceFactory(factory))
+            .setAudioAttributes(audioAttrs, /* handleAudioFocus= */ true)
+            .setHandleAudioBecomingNoisy(true)
             .build()
         mediaSession = MediaSession.Builder(this, player).build()
     }
