@@ -25,6 +25,7 @@ fun OnboardingScreen(store: TasteStore, onDone: () -> Unit) {
     val langs = remember { mutableStateListOf<String>() }
     val moods = remember { mutableStateListOf<String>() }
     var artists by remember { mutableStateOf("") }
+    var musicOnly by remember { mutableStateOf(store.getMusicOnly()) }
 
     LaunchedEffect(Unit) {
         val p = store.load()
@@ -34,6 +35,7 @@ fun OnboardingScreen(store: TasteStore, onDone: () -> Unit) {
     }
 
     fun finish() {
+        store.setMusicOnly(musicOnly)
         store.save(
             TasteProfile(
                 languages = langs.toList(),
@@ -52,7 +54,7 @@ fun OnboardingScreen(store: TasteStore, onDone: () -> Unit) {
             .padding(24.dp)
     ) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("Step ${step + 1} of 3", color = TextTertiary, fontSize = 13.sp)
+            Text("Step ${step + 1} of 4", color = TextTertiary, fontSize = 13.sp)
             TextButton(onClick = { store.save(TasteProfile()); onDone() }) {
                 Text("Skip", color = TextSecondary)
             }
@@ -98,6 +100,32 @@ fun OnboardingScreen(store: TasteStore, onDone: () -> Unit) {
                     }
                 }
             }
+            2 -> {
+                Text("What do you want to hear?", color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(16.dp))
+                listOf(
+                    true to ("Music only" to "Songs. No podcasts, compilations or long videos."),
+                    false to ("Music, podcasts & more" to "Everything on YouTube, including long-form.")
+                ).forEach { (value, labelDesc) ->
+                    val (label, desc) = labelDesc
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp),
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                        color = if (musicOnly == value) DarkSurfaceElevated else DarkSurface,
+                        border = CardDefaults.outlinedCardBorder().copy(
+                            brush = androidx.compose.ui.graphics.SolidColor(if (musicOnly == value) AmberOrange else DarkSurfaceBorder)
+                        ),
+                        onClick = { musicOnly = value }
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(label, color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            Text(desc, color = TextSecondary, fontSize = 13.sp)
+                        }
+                    }
+                }
+            }
             else -> {
                 Text("Favourite artists?", color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(8.dp))
@@ -126,10 +154,10 @@ fun OnboardingScreen(store: TasteStore, onDone: () -> Unit) {
                 Spacer(Modifier.width(1.dp))
             }
             Button(
-                onClick = { if (step < 2) step++ else finish() },
+                onClick = { if (step < 3) step++ else finish() },
                 colors = ButtonDefaults.buttonColors(containerColor = AmberOrange, contentColor = DarkBackground)
             ) {
-                Text(if (step < 2) "Next" else "Done", fontWeight = FontWeight.Bold)
+                Text(if (step < 3) "Next" else "Done", fontWeight = FontWeight.Bold)
             }
         }
     }

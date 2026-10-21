@@ -36,9 +36,15 @@ class YouTubeExtractor {
     /**
      * Searches YouTube for music tracks matching the given query.
      */
-    suspend fun searchSongs(query: String): List<Song> = withContext(Dispatchers.IO) {
-        // Same results as the YouTube app first (compilations, long mixes, channels),
-        // then YouTube Music songs not already listed.
+    suspend fun searchSongs(query: String, musicOnly: Boolean = true): List<Song> = withContext(Dispatchers.IO) {
+        if (musicOnly) {
+            // Music mode: songs only, no podcasts, compilations or long videos.
+            val songs = searchYouTubeMusic(query)
+            if (songs.isNotEmpty()) return@withContext songs
+            return@withContext searchViaMirrors(query)
+        }
+        // Podcasts & more: same results as the YouTube app first (compilations,
+        // long mixes, channels), then YouTube Music songs not already listed.
         val web = searchYouTubeWeb(query)
         val songs = searchYouTubeMusic(query)
         val merged = (web + songs).distinctBy { it.id }

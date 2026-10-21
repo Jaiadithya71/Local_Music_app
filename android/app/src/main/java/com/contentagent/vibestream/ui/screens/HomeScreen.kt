@@ -92,6 +92,8 @@ fun HomeScreen(
     val repeatMode by playerController.repeat.collectAsState()
     var showQueue by remember { mutableStateOf(false) }
     var addToPlaylistSong by remember { mutableStateOf<Song?>(null) }
+    val tasteStore = remember { com.contentagent.vibestream.data.local.TasteStore(androidx.compose.ui.platform.LocalContext.current) }
+    var musicOnly by remember { mutableStateOf(tasteStore.getMusicOnly()) }
     LaunchedEffect(currentSong?.id) {
         currentSong?.let { library.addRecent(it) }
     }
@@ -105,7 +107,7 @@ fun HomeScreen(
 
         coroutineScope.launch {
             try {
-                val results = extractor.searchSongs(query)
+                val results = extractor.searchSongs(query, musicOnly)
                 searchResults = results
                 if (results.isEmpty()) {
                     searchError = "No songs found for '$query'. Try another search term."
@@ -254,6 +256,34 @@ fun HomeScreen(
                             unfocusedTextColor = TextPrimary
                         )
                     )
+
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilterChip(
+                            selected = musicOnly,
+                            onClick = { musicOnly = true; tasteStore.setMusicOnly(true) },
+                            label = { Text("Music", fontSize = 12.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                containerColor = DarkSurfaceElevated,
+                                labelColor = TextSecondary,
+                                selectedContainerColor = AmberOrange,
+                                selectedLabelColor = DarkBackground
+                            )
+                        )
+                        FilterChip(
+                            selected = !musicOnly,
+                            onClick = { musicOnly = false; tasteStore.setMusicOnly(false) },
+                            label = { Text("Podcasts & more", fontSize = 12.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                containerColor = DarkSurfaceElevated,
+                                labelColor = TextSecondary,
+                                selectedContainerColor = AmberOrange,
+                                selectedLabelColor = DarkBackground
+                            )
+                        )
+                    }
 
                     // Real-time Search Suggestions / Autocomplete Recommendations
                     if (showSuggestions && searchSuggestions.isNotEmpty()) {
@@ -539,6 +569,8 @@ fun HomeScreen(
                     recent = recentSongs,
                     liked = likedSongs,
                     playlists = userPlaylists,
+                    musicOnly = musicOnly,
+                    onModeChange = { musicOnly = it; tasteStore.setMusicOnly(it) },
                     onEditTaste = onEditTaste,
                     onPlayMood = { q ->
                         playerController.setShuffle(true)

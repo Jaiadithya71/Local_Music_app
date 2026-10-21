@@ -15,6 +15,12 @@ class TasteStore(context: Context) {
 
     fun isDone() = prefs.getBoolean("done", false)
 
+    /** true = Music only (songs), false = Podcasts & other listening too. */
+    fun getMusicOnly() = prefs.getBoolean("music_only", true)
+    fun setMusicOnly(musicOnly: Boolean) {
+        prefs.edit().putBoolean("music_only", musicOnly).apply()
+    }
+
     fun save(profile: TasteProfile) {
         prefs.edit().putBoolean("done", true).putString("profile", Gson().toJson(profile)).apply()
     }

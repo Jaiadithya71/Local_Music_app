@@ -60,9 +60,8 @@ private fun buildMoodMix(
     liked: List<Song>,
     recent: List<Song>,
     playlists: List<com.contentagent.vibestream.data.local.Playlist>,
-    seedQueries: List<String>
+    genreSongs: List<Song>
 ): List<Song> {
-    val genreSongs = seedQueries.flatMap { ShelfCache.data[it] ?: emptyList() }
     return (liked + recent + playlists.flatMap { it.songs } + genreSongs)
         .distinctBy { it.id }
         .take(50)
@@ -71,33 +70,37 @@ private fun buildMoodMix(
 private fun shelfPrefs(ctx: android.content.Context) =
     ctx.getSharedPreferences("vibestream_shelves", android.content.Context.MODE_PRIVATE)
 
-private fun restoreShelves(ctx: android.content.Context, queries: List<String>) {
+private fun cacheKey(query: String, musicOnly: Boolean) = (if (musicOnly) "M|" else "A|") + query
+
+private fun restoreShelves(ctx: android.content.Context, queries: List<String>, musicOnly: Boolean) {
     val gson = com.google.gson.Gson()
     val type = object : com.google.gson.reflect.TypeToken<List<Song>>() {}.type
     for (q in queries) {
-        if (ShelfCache.data[q] != null) continue
-        val json = shelfPrefs(ctx).getString(q, null) ?: continue
+        val k = cacheKey(q, musicOnly)
+        if (ShelfCache.data[k] != null) continue
+        val json = shelfPrefs(ctx).getString(k, null) ?: continue
         val list: List<Song>? = try { gson.fromJson(json, type) } catch (e: Exception) { null }
-        if (!list.isNullOrEmpty()) ShelfCache.data[q] = list
+        if (!list.isNullOrEmpty()) ShelfCache.data[k] = list
     }
 }
 
 /** Fetches a shelf, keeps showing cached songs if the refresh fails. */
-private suspend fun loadShelf(ctx: android.content.Context, extractor: YouTubeExtractor, query: String) {
-    ShelfCache.failed.remove(query)
+private suspend fun loadShelf(ctx: android.content.Context, extractor: YouTubeExtractor, query: String, musicOnly: Boolean) {
+    val k = cacheKey(query, musicOnly)
+    ShelfCache.failed.remove(k)
     var result: List<Song> = emptyList()
     for (attempt in 1..2) {
         result = try {
-            kotlinx.coroutines.withTimeout(20_000) { extractor.searchSongs(query) }
+            kotlinx.coroutines.withTimeout(20_000) { extractor.searchSongs(query, musicOnly) }
         } catch (e: Exception) { emptyList() }
         if (result.isNotEmpty()) break
     }
     if (result.isNotEmpty()) {
         val clean = result.take(12).map { it.copy(streamUrl = null) }
-        ShelfCache.data[query] = clean
-        shelfPrefs(ctx).edit().putString(query, com.google.gson.Gson().toJson(clean)).apply()
-    } else if (ShelfCache.data[query] == null) {
-        ShelfCache.failed[query] = true
+        ShelfCache.data[k] = clean
+        shelfPrefs(ctx).edit().putString(k, com.google.gson.Gson().toJson(clean)).apply()
+    } else if (ShelfCache.data[k] == null) {
+        ShelfCache.failed[k] = true
     }
 }
 
@@ -112,7 +115,9 @@ fun HomeShelves(
     liked: List<Song> = emptyList(),
     playlists: List<com.contentagent.vibestream.data.local.Playlist> = emptyList(),
     onPlayMood: (List<Song>) -> Unit = {},
-    onEditTaste: () -> Unit = {}
+    onEditTaste: () -> Unit = {},
+    musicOnly: Boolean = true,
+    onModeChange: (Boolean) -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
     val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -133,24 +138,54 @@ fun HomeShelves(
         listOf("Top picks for you" to topQuery) + tasteShelves.ifEmpty { shelves.drop(1) }
     }
     val seedQueries = (shelfList.map { it.second } + mixSeedQueries).distinct()
+    val seedSongs = seedQueries.flatMap { ShelfCache.data[cacheKey(it, musicOnly)] ?: emptyList() }
     var moodMix by remember { mutableStateOf(restoreMoodMix(ctx)) }
     // Show cached shelves instantly, then refresh one at a time in the background.
-    LaunchedEffect(shelfList) {
-        restoreShelves(ctx, shelfList.map { it.second })
-        for ((_, q) in shelfList) loadShelf(ctx, extractor, q)
-        for (q in seedQueries) if (ShelfCache.data[q] == null) loadShelf(ctx, extractor, q)
-        moodMix = buildMoodMix(liked, recent, playlists, seedQueries)
+    LaunchedEffect(shelfList, musicOnly) {
+        restoreShelves(ctx, shelfList.map { it.second }, musicOnly)
+        for ((_, q) in shelfList) loadShelf(ctx, extractor, q, musicOnly)
+        for (q in seedQueries) if (ShelfCache.data[cacheKey(q, musicOnly)] == null) loadShelf(ctx, extractor, q, musicOnly)
+        moodMix = buildMoodMix(liked, recent, playlists, seedSongs)
         if (moodMix.isNotEmpty()) saveMoodMix(ctx, moodMix)
     }
     // Keep the mix in step with his library without hitting the network.
     LaunchedEffect(liked.size, recent.size, playlists.size) {
-        val rebuilt = buildMoodMix(liked, recent, playlists, seedQueries)
+        val rebuilt = buildMoodMix(liked, recent, playlists, seedSongs)
         if (rebuilt.isNotEmpty()) {
             moodMix = rebuilt
             saveMoodMix(ctx, rebuilt)
         }
     }
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
+        item {
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                androidx.compose.material3.FilterChip(
+                    selected = musicOnly,
+                    onClick = { onModeChange(true) },
+                    label = { Text("Music") },
+                    colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+                        containerColor = DarkSurfaceElevated,
+                        labelColor = TextSecondary,
+                        selectedContainerColor = AmberOrange,
+                        selectedLabelColor = DarkBackground
+                    )
+                )
+                androidx.compose.material3.FilterChip(
+                    selected = !musicOnly,
+                    onClick = { onModeChange(false) },
+                    label = { Text("Podcasts & more") },
+                    colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+                        containerColor = DarkSurfaceElevated,
+                        labelColor = TextSecondary,
+                        selectedContainerColor = AmberOrange,
+                        selectedLabelColor = DarkBackground
+                    )
+                )
+            }
+        }
         if (moodMix.isNotEmpty()) {
             item {
                 Row(
@@ -241,8 +276,8 @@ fun HomeShelves(
             }
         }
         items(shelfList) { (title, query) ->
-            val songs = ShelfCache.data[query]
-            val failed = ShelfCache.failed[query] == true
+            val songs = ShelfCache.data[cacheKey(query, musicOnly)]
+            val failed = ShelfCache.failed[cacheKey(query, musicOnly)] == true
             Column(modifier = Modifier.padding(top = 16.dp)) {
                 Text(
                     text = title,
@@ -259,7 +294,7 @@ fun HomeShelves(
                         if (failed) {
                             Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
                                 Text("Could not load this shelf", color = TextSecondary, fontSize = 13.sp)
-                                androidx.compose.material3.TextButton(onClick = { scope.launch { loadShelf(ctx, extractor, query) } }) {
+                                androidx.compose.material3.TextButton(onClick = { scope.launch { loadShelf(ctx, extractor, query, musicOnly) } }) {
                                     Text("Retry", color = AmberOrange)
                                 }
                             }
