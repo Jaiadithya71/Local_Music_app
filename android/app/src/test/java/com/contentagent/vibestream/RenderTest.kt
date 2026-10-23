@@ -22,7 +22,6 @@ import org.junit.runner.RunWith
 import org.robolectric.Shadows
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowDialog
-import org.robolectric.shadows.ShadowPopupWindow
 import java.io.File
 
 @RunWith(AndroidJUnit4::class)
@@ -53,8 +52,11 @@ class RenderTest {
 
     private fun snapDialog(activity: Activity, name: String) {
         val dlg = ShadowDialog.getLatestDialog() ?: ShadowDialog.getShownDialogs().lastOrNull()
-        val popup = ShadowPopupWindow.getLatestPopupWindow()?.contentView
-        val v = dlg?.window?.decorView ?: popup ?: activity.window.decorView
+        // Compose ModalBottomSheet is a Popup, not a Dialog: check window-manager views too.
+        val wm = activity.getSystemService(android.content.Context.WINDOW_SERVICE) as android.view.WindowManager
+        val added = try { Shadows.shadowOf(wm).views } catch (t: Throwable) { emptyList() }
+        val v = dlg?.window?.decorView ?: added.lastOrNull() ?: activity.window.decorView
+        println("SNAP $name dialog=${dlg != null} addedViews=${added.size} using=${v.javaClass.simpleName}")
         v.measure(
             View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.AT_MOST),
             View.MeasureSpec.makeMeasureSpec(2400, View.MeasureSpec.AT_MOST))
