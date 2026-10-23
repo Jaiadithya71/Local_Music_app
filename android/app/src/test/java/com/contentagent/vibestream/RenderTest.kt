@@ -7,6 +7,10 @@ import android.os.Looper
 import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.ui.platform.AndroidComposeView
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsNode
+import android.view.ViewGroup
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.contentagent.vibestream.data.lyrics.LyricsRepository
@@ -74,6 +78,26 @@ class RenderTest {
             View.MeasureSpec.makeMeasureSpec(2400, View.MeasureSpec.EXACTLY))
         v.layout(0, 0, 1080, 2400)
         snap(v, name, 1080, 2400)
+    }
+
+    private fun popupRoot(activity: Activity): View {
+        val wm = activity.getSystemService(android.content.Context.WINDOW_SERVICE) as android.view.WindowManager
+        val added = try { (Shadows.shadowOf(wm) as org.robolectric.shadows.ShadowWindowManagerImpl).views } catch (t: Throwable) { emptyList<android.view.View>() }
+        return added.lastOrNull() ?: activity.window.decorView
+    }
+
+    private fun findAndroidComposeView(v: View): AndroidComposeView? {
+        if (v is AndroidComposeView) return v
+        if (v is ViewGroup) for (i in 0 until v.childCount) {
+            findAndroidComposeView(v.getChildAt(i))?.let { return it }
+        }
+        return null
+    }
+
+    private fun scrollAllToBottom(node: SemanticsNode): Boolean {
+        var consumed = node.config.getOrNull(SemanticsActions.ScrollBy)?.action?.invoke(0f, 100000f) ?: false
+        node.children.forEach { if (scrollAllToBottom(it)) consumed = true }
+        return consumed
     }
 
     /** Full-content variant: let the sheet measure its full scrollable height to prove nothing is clipped when space allows. */
@@ -225,6 +249,12 @@ class RenderTest {
             pump(act)
             snapViewport(act, "full-player-lyrics")
             snapFullHeight(act, "full-player-lyrics-fullheight")
+            // Prove bottom content is scroll-reachable inside the phone viewport.
+            val composeView = findAndroidComposeView(popupRoot(act))
+            val scrolled = composeView?.let { scrollAllToBottom(it.semanticsOwner.rootSemanticsNode) } ?: false
+            println("SCROLL consumed=$scrolled")
+            pump(act)
+            snapViewport(act, "full-player-lyrics-scrolled")
         }
     }
 }
