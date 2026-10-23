@@ -70,7 +70,7 @@ class LyricsRepository(context: Context) {
     }
 
     /** Parses LRC lines like [03:12.50]text into timed entries. */
-    private fun parseLrc(lrc: String): List<LyricLine> {
+    internal fun parseLrc(lrc: String): List<LyricLine> {
         val rx = Regex("""\[(\d+):(\d+(?:\.\d+)?)](.*)""")
         val out = mutableListOf<LyricLine>()
         for (raw in lrc.lines()) {
