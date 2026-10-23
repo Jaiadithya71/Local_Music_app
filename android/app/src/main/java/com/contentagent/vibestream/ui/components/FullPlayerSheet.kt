@@ -53,7 +53,13 @@ fun FullPlayerSheet(
     onToggleLike: () -> Unit = {},
     onAddToPlaylist: () -> Unit = {},
     moreFromArtist: List<Song> = emptyList(),
-    onPlayArtistSong: (Song, List<Song>) -> Unit = { _, _ -> }
+    onPlayArtistSong: (Song, List<Song>) -> Unit = { _, _ -> },
+    showLyrics: Boolean = false,
+    onToggleLyrics: () -> Unit = {},
+    onSleepTimer: () -> Unit = {},
+    onEqualizer: () -> Unit = {},
+    sleepTimerActive: Boolean = false,
+    lyricsContent: (@Composable () -> Unit)? = null
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -243,6 +249,39 @@ fun FullPlayerSheet(
                 IconButton(onClick = onDismiss) {
                     Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Collapse player", tint = TextSecondary, modifier = Modifier.size(30.dp))
                 }
+            }
+
+            // Lyrics, sleep timer, equalizer
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onToggleLyrics) {
+                    Icon(
+                        Icons.Default.Lyrics, contentDescription = "Lyrics",
+                        tint = if (showLyrics) AmberOrange else TextSecondary,
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
+                IconButton(onClick = onSleepTimer) {
+                    Icon(
+                        Icons.Default.Bedtime, contentDescription = "Sleep timer",
+                        tint = if (sleepTimerActive) AmberOrange else TextSecondary,
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
+                IconButton(onClick = onEqualizer) {
+                    Icon(
+                        Icons.Default.Equalizer, contentDescription = "Equalizer",
+                        tint = TextSecondary, modifier = Modifier.size(26.dp)
+                    )
+                }
+            }
+
+            if (showLyrics && lyricsContent != null) {
+                Spacer(modifier = Modifier.height(16.dp))
+                lyricsContent()
             }
 
             // More from this artist - related picks under the controls, like

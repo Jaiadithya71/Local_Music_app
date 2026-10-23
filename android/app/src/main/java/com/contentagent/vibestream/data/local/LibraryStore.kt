@@ -99,4 +99,38 @@ class LibraryStore(context: Context) {
         _playlists.value = list
         save("playlists", list)
     }
+
+    /** Merge a backup file into the library: liked/recent dedupe by song id,
+     *  playlists merge by name (songs deduped inside each). */
+    fun mergeBackup(likedSongs: List<Song>, recentSongs: List<Song>, backupPlaylists: List<Playlist>) {
+        if (likedSongs.isNotEmpty()) {
+            val merged = _liked.value.toMutableList()
+            for (s in likedSongs) if (merged.none { it.id == s.id }) merged.add(clean(s))
+            _liked.value = merged
+            save("liked", merged)
+        }
+        if (recentSongs.isNotEmpty()) {
+            val merged = _recent.value.toMutableList()
+            for (s in recentSongs) if (merged.none { it.id == s.id }) merged.add(clean(s))
+            val trimmed = merged.take(30)
+            _recent.value = trimmed
+            save("recent", trimmed)
+        }
+        if (backupPlaylists.isNotEmpty()) {
+            val merged = _playlists.value.toMutableList()
+            for (pl in backupPlaylists) {
+                val i = merged.indexOfFirst { it.name.equals(pl.name, true) }
+                if (i >= 0) {
+                    val existing = merged[i]
+                    val songs = existing.songs.toMutableList()
+                    for (s in pl.songs) if (songs.none { it.id == s.id }) songs.add(clean(s))
+                    merged[i] = existing.copy(songs = songs)
+                } else {
+                    merged.add(Playlist(pl.name, pl.songs.map { clean(it) }))
+                }
+            }
+            _playlists.value = merged
+            save("playlists", merged)
+        }
+    }
 }

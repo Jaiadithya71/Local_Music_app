@@ -31,7 +31,8 @@ import java.io.File
  */
 class MusicPlayerController(
     private val context: Context,
-    private val extractor: YouTubeExtractor
+    private val extractor: YouTubeExtractor,
+    private val queueStore: com.contentagent.vibestream.data.local.QueueStore? = null
 ) {
 
     private val playerScope = CoroutineScope(Dispatchers.Main + Job())
@@ -84,17 +85,69 @@ class MusicPlayerController(
     private val _repeat = MutableStateFlow(0) // 0 off, 1 all, 2 one
     val repeat: StateFlow<Int> = _repeat.asStateFlow()
 
+    // ---- Sleep timer (fades volume out over the last 15s, then pauses) ----
+    private var sleepJob: Job? = null
+    private val _sleepEndAtMs = MutableStateFlow<Long?>(null)
+    val sleepEndAtMs: StateFlow<Long?> = _sleepEndAtMs.asStateFlow()
+    private val _sleepEndOfTrack = MutableStateFlow(false)
+    val sleepEndOfTrack: StateFlow<Boolean> = _sleepEndOfTrack.asStateFlow()
+
+    fun setSleepTimerMinutes(minutes: Int) {
+        cancelSleepTimer()
+        val endAt = System.currentTimeMillis() + minutes * 60_000L
+        _sleepEndAtMs.value = endAt
+        sleepJob = playerScope.launch {
+            while (isActive) {
+                val remaining = endAt - System.currentTimeMillis()
+                if (remaining <= 0) break
+                if (remaining <= 15_000L) {
+                    controller?.volume = (remaining / 15_000f).coerceIn(0f, 1f)
+                }
+                delay(250)
+            }
+            controller?.pause()
+            controller?.volume = 1f
+            _sleepEndAtMs.value = null
+        }
+    }
+
+    fun setSleepEndOfTrack() {
+        cancelSleepTimer()
+        _sleepEndOfTrack.value = true
+    }
+
+    fun cancelSleepTimer() {
+        sleepJob?.cancel()
+        sleepJob = null
+        _sleepEndAtMs.value = null
+        _sleepEndOfTrack.value = false
+        controller?.volume = 1f
+    }
+
+    // ---- Queue persistence ----
+    private var pendingResumeMs: Long? = null
+
+    private fun persistQueue() {
+        queueStore?.save(
+            _queue.value, _queueIndex.value,
+            controller?.currentPosition ?: 0L,
+            _shuffle.value, _repeat.value
+        )
+    }
+
     fun toggleShuffle() {
         _shuffle.value = !_shuffle.value
         shufflePlayed.clear()
+        persistQueue()
     }
-    fun setShuffle(on: Boolean) { _shuffle.value = on }
-    fun cycleRepeat() { _repeat.value = (_repeat.value + 1) % 3 }
+    fun setShuffle(on: Boolean) { _shuffle.value = on; persistQueue() }
+    fun cycleRepeat() { _repeat.value = (_repeat.value + 1) % 3; persistQueue() }
 
     fun playAt(index: Int) {
         val q = _queue.value
         if (index !in q.indices) return
         _queueIndex.value = index
+        persistQueue()
         startPlayback(q[index])
     }
 
@@ -195,7 +248,11 @@ class MusicPlayerController(
                         _isBuffering.value = false
                         _isPlaying.value = false
                         stopProgressTracker()
-                        next()
+                        if (_sleepEndOfTrack.value) {
+                            _sleepEndOfTrack.value = false
+                        } else {
+                            next()
+                        }
                     }
                     Player.STATE_IDLE -> {
                         _isBuffering.value = false
@@ -218,6 +275,11 @@ class MusicPlayerController(
                     restoreCurrentSong()
                 }
                 plannedShuffleNext = -1
+                if (_sleepEndOfTrack.value && reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
+                    _sleepEndOfTrack.value = false
+                    controller?.pause()
+                }
+                persistQueue()
                 // Drop already-played items so the player playlist stays compact.
                 controller?.let { c ->
                     // Keep recent played items so notification/lock-screen Previous works.
@@ -259,6 +321,20 @@ class MusicPlayerController(
                 PlaybackService.nextHandler = { next() }
                 PlaybackService.previousHandler = { previous() }
                 restoreCurrentSong()
+                if (_currentSong.value == null) {
+                    // Cold start: bring back the last listening session without
+                    // starting playback. Play/next resolves the stream on demand.
+                    queueStore?.load()?.let { saved ->
+                        if (saved.index in saved.songs.indices) {
+                            _queue.value = saved.songs
+                            _queueIndex.value = saved.index
+                            _currentSong.value = saved.songs[saved.index]
+                            _shuffle.value = saved.shuffle
+                            _repeat.value = saved.repeat
+                            pendingResumeMs = saved.positionMs
+                        }
+                    }
+                }
                 _isPlaying.value = controller?.isPlaying == true
                 if (_isPlaying.value) startProgressTracker()
             } catch (e: Exception) {
@@ -380,6 +456,7 @@ class MusicPlayerController(
             _queue.value = listOf(song)
             _queueIndex.value = 0
         }
+        persistQueue()
         startPlayback(song)
     }
 
@@ -425,6 +502,9 @@ class MusicPlayerController(
                 _currentSong.value = song
                 player.setMediaItem(mediaItem)
                 player.prepare()
+                val resume = pendingResumeMs
+                pendingResumeMs = null
+                if (resume != null && resume > 0) player.seekTo(resume)
                 player.play()
                 scheduleNextPrefetch()
             }
@@ -432,10 +512,16 @@ class MusicPlayerController(
     }
 
     fun togglePlayPause() {
-        if (controller?.isPlaying == true) {
-            controller?.pause()
+        val c = controller
+        if ((c == null || c.mediaItemCount == 0) && _currentSong.value != null) {
+            // Restored queue that was never loaded into the player: start it.
+            startPlayback(_currentSong.value!!)
+            return
+        }
+        if (c?.isPlaying == true) {
+            c.pause()
         } else {
-            controller?.play()
+            c?.play()
         }
     }
 
@@ -475,6 +561,7 @@ class MusicPlayerController(
     private fun stopProgressTracker() {
         progressTrackerJob?.cancel()
         progressTrackerJob = null
+        queueStore?.savePosition(controller?.currentPosition ?: 0L)
     }
 
     fun release() {

@@ -27,13 +27,22 @@ import androidx.compose.ui.text.style.TextOverflow
 import coil.compose.AsyncImage
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import com.contentagent.vibestream.data.extractor.YouTubeExtractor
 import com.contentagent.vibestream.data.local.DownloadManager
+import com.contentagent.vibestream.data.local.LibraryBackup
 import com.contentagent.vibestream.data.local.OfflineStorage
+import com.contentagent.vibestream.data.lyrics.LyricsRepository
 import com.contentagent.vibestream.data.model.Song
+import com.contentagent.vibestream.player.EqualizerManager
 import com.contentagent.vibestream.player.MusicPlayerController
+import com.contentagent.vibestream.player.PlaybackService
+import com.contentagent.vibestream.ui.components.EqualizerDialog
 import com.contentagent.vibestream.ui.components.FullPlayerSheet
+import com.contentagent.vibestream.ui.components.LyricsView
 import com.contentagent.vibestream.ui.components.MiniPlayer
+import com.contentagent.vibestream.ui.components.SleepTimerDialog
 import com.contentagent.vibestream.ui.components.SongCard
 import com.contentagent.vibestream.ui.theme.*
 import kotlinx.coroutines.launch
@@ -104,6 +113,52 @@ fun HomeScreen(
     val tasteStore = remember { com.contentagent.vibestream.data.local.TasteStore(appCtx) }
     var musicOnly by remember { mutableStateOf(tasteStore.getMusicOnly()) }
     var resultFilter by remember { mutableStateOf("all") }
+
+    // Lyrics / sleep timer / equalizer state
+    val lyricsRepo = remember { LyricsRepository(appCtx) }
+    val eqManager = remember { EqualizerManager(appCtx) }
+    var showLyrics by remember { mutableStateOf(false) }
+    var lyricsLoading by remember { mutableStateOf(false) }
+    var lyricsResult by remember { mutableStateOf<LyricsRepository.Lyrics?>(null) }
+    var showSleepDialog by remember { mutableStateOf(false) }
+    var showEqDialog by remember { mutableStateOf(false) }
+    val sleepEndAt by playerController.sleepEndAtMs.collectAsState()
+    val sleepEndOfTrack by playerController.sleepEndOfTrack.collectAsState()
+    // Attach the EQ to the player audio session once playback exists.
+    LaunchedEffect(isPlaying) { if (isPlaying) eqManager.ensure() }
+    LaunchedEffect(currentSong?.id, showLyrics) {
+        val s = currentSong
+        if (showLyrics && s != null) {
+            lyricsLoading = true
+            lyricsResult = lyricsRepo.get(s)
+            lyricsLoading = false
+        }
+    }
+
+    // Library backup (export/import via the system file picker)
+    val backup = remember { LibraryBackup(appCtx, library) }
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) coroutineScope.launch {
+            val ok = backup.exportTo(uri)
+            android.widget.Toast.makeText(
+                appCtx, if (ok) "Library backed up" else "Backup failed",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) coroutineScope.launch {
+            val ok = backup.importFrom(uri)
+            android.widget.Toast.makeText(
+                appCtx, if (ok) "Library restored" else "Import failed",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
     LaunchedEffect(currentSong?.id) {
         currentSong?.let { library.addRecent(it) }
     }
@@ -550,6 +605,12 @@ fun HomeScreen(
                             )
                         )
                     }
+                    IconButton(onClick = { exportLauncher.launch("vibestream-library.json") }) {
+                        Icon(Icons.Default.Upload, contentDescription = "Back up library", tint = TextSecondary, modifier = Modifier.size(20.dp))
+                    }
+                    IconButton(onClick = { importLauncher.launch(arrayOf("application/json", "text/plain", "*/*")) }) {
+                        Icon(Icons.Default.FileDownload, contentDescription = "Restore library backup", tint = TextSecondary, modifier = Modifier.size(20.dp))
+                    }
                 }
                 if (librarySection != 0) {
                     Box(modifier = Modifier.weight(1f)) {
@@ -723,11 +784,19 @@ fun HomeScreen(
             onPrevious = { playerController.previous() },
             onQueue = { showQueue = true },
             isLiked = likedSongs.any { it.id == song.id },
-            onToggleLike = { library.toggleLike(song) },
+            onToggleLike = { library.toggleLike(song); PlaybackService.refreshButtons?.invoke() },
             onAddToPlaylist = { addToPlaylistSong = song },
             moreFromArtist = moreFromArtist,
             onPlayArtistSong = { sg, ctx -> playerController.playSong(sg, ctx) },
-            onDismiss = { isPlayerSheetVisible = false }
+            onDismiss = { isPlayerSheetVisible = false },
+            showLyrics = showLyrics,
+            onToggleLyrics = { showLyrics = !showLyrics },
+            onSleepTimer = { showSleepDialog = true },
+            onEqualizer = { eqManager.ensure(); showEqDialog = true },
+            sleepTimerActive = sleepEndAt != null || sleepEndOfTrack,
+            lyricsContent = {
+                LyricsView(loading = lyricsLoading, lyrics = lyricsResult, positionMs = currentPosition)
+            }
         )
     }
     if (showQueue) {
@@ -735,5 +804,18 @@ fun HomeScreen(
     }
     addToPlaylistSong?.let { sg ->
         AddToPlaylistDialog(library = library, song = sg, onDismiss = { addToPlaylistSong = null })
+    }
+    if (showSleepDialog) {
+        SleepTimerDialog(
+            endAtMs = sleepEndAt,
+            endOfTrack = sleepEndOfTrack,
+            onPickMinutes = { playerController.setSleepTimerMinutes(it) },
+            onPickEndOfTrack = { playerController.setSleepEndOfTrack() },
+            onCancelTimer = { playerController.cancelSleepTimer() },
+            onDismiss = { showSleepDialog = false }
+        )
+    }
+    if (showEqDialog) {
+        EqualizerDialog(eq = eqManager, onDismiss = { showEqDialog = false })
     }
 }

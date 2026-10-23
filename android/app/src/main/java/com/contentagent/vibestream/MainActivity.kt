@@ -16,7 +16,9 @@ import com.contentagent.vibestream.data.local.LibraryStore
 import com.contentagent.vibestream.data.local.TasteStore
 import com.contentagent.vibestream.ui.screens.OnboardingScreen
 import com.contentagent.vibestream.data.local.OfflineStorage
+import com.contentagent.vibestream.data.local.QueueStore
 import com.contentagent.vibestream.player.MusicPlayerController
+import com.contentagent.vibestream.player.PlaybackService
 import com.contentagent.vibestream.ui.screens.HomeScreen
 import com.contentagent.vibestream.ui.theme.DarkBackground
 import com.contentagent.vibestream.ui.theme.VibeStreamTheme
@@ -41,7 +43,19 @@ class MainActivity : ComponentActivity() {
         offlineStorage = OfflineStorage(applicationContext)
         library = LibraryStore(applicationContext)
         downloadManager = DownloadManager(applicationContext, extractor, offlineStorage)
-        playerController = MusicPlayerController(applicationContext, extractor)
+        playerController = MusicPlayerController(applicationContext, extractor, QueueStore(applicationContext))
+
+        // Spotify-style media-notification actions (like / shuffle), handled app-side.
+        PlaybackService.likeHandler = {
+            val s = playerController.currentSong.value
+            if (s != null) library.toggleLike(s)
+        }
+        PlaybackService.shuffleHandler = { playerController.toggleShuffle() }
+        PlaybackService.isLikedProvider = {
+            val s = playerController.currentSong.value
+            s != null && library.liked.value.any { it.id == s.id }
+        }
+        PlaybackService.isShuffleProvider = { playerController.shuffle.value }
 
         setContent {
             VibeStreamTheme {

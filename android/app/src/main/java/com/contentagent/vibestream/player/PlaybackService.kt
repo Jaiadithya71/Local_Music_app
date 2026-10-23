@@ -1,18 +1,30 @@
 package com.contentagent.vibestream.player
 
 import android.content.Intent
+import android.os.Bundle
 import androidx.media3.common.Player
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionResult
+import com.contentagent.vibestream.R
+import com.google.common.collect.ImmutableList
+import com.google.common.util.concurrent.Futures
+import com.google.common.util.concurrent.ListenableFuture
 
 /**
  * Android MediaSessionService ensuring audio continues seamlessly
  * in the background when screen is off or app is minimized.
+ *
+ * The media notification carries Spotify-style extra action buttons
+ * (like/unlike the current track, toggle shuffle) via the session's
+ * custom layout, next to the usual previous / play / next controls.
  */
 class PlaybackService : MediaSessionService() {
 
@@ -21,9 +33,77 @@ class PlaybackService : MediaSessionService() {
         // here when the ExoPlayer playlist itself has no adjacent item to seek to.
         var nextHandler: (() -> Unit)? = null
         var previousHandler: (() -> Unit)? = null
+
+        // Spotify-style notification actions, wired from MainActivity.
+        var likeHandler: (() -> Unit)? = null
+        var shuffleHandler: (() -> Unit)? = null
+        var isLikedProvider: (() -> Boolean)? = null
+        var isShuffleProvider: (() -> Boolean)? = null
+        var refreshButtons: (() -> Unit)? = null
+
+        // ExoPlayer's audio session, used by EqualizerManager for the system EQ.
+        var audioSessionId: Int = 0
+
+        private const val CMD_LIKE = "com.contentagent.vibestream.LIKE"
+        private const val CMD_SHUFFLE = "com.contentagent.vibestream.SHUFFLE"
     }
 
     private var mediaSession: MediaSession? = null
+
+    private val sessionCallback = object : MediaSession.Callback {
+        override fun onConnect(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo
+        ): MediaSession.ConnectionResult {
+            val base = super.onConnect(session, controller)
+            val sessionCommands = base.availableSessionCommands.buildUpon()
+                .add(SessionCommand(CMD_LIKE, Bundle.EMPTY))
+                .add(SessionCommand(CMD_SHUFFLE, Bundle.EMPTY))
+                .build()
+            return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                .setAvailableSessionCommands(sessionCommands)
+                .setAvailablePlayerCommands(base.availablePlayerCommands)
+                .build()
+        }
+
+        override fun onCustomCommand(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            customCommand: SessionCommand,
+            args: Bundle
+        ): ListenableFuture<SessionResult> {
+            when (customCommand.customAction) {
+                CMD_LIKE -> {
+                    likeHandler?.invoke()
+                    updateCustomLayout()
+                    return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+                }
+                CMD_SHUFFLE -> {
+                    shuffleHandler?.invoke()
+                    updateCustomLayout()
+                    return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+                }
+            }
+            return Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_NOT_SUPPORTED))
+        }
+    }
+
+    private fun updateCustomLayout() {
+        val session = mediaSession ?: return
+        val liked = isLikedProvider?.invoke() == true
+        val shuffling = isShuffleProvider?.invoke() == true
+        val like = CommandButton.Builder()
+            .setSessionCommand(SessionCommand(CMD_LIKE, Bundle.EMPTY))
+            .setIconResId(if (liked) R.drawable.ic_notif_like_filled else R.drawable.ic_notif_like)
+            .setDisplayName(if (liked) "Unlike" else "Like")
+            .build()
+        val shuffle = CommandButton.Builder()
+            .setSessionCommand(SessionCommand(CMD_SHUFFLE, Bundle.EMPTY))
+            .setIconResId(R.drawable.ic_notif_shuffle)
+            .setDisplayName(if (shuffling) "Shuffle on" else "Shuffle")
+            .build()
+        session.setCustomLayout(ImmutableList.of(like, shuffle))
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -57,6 +137,7 @@ class PlaybackService : MediaSessionService() {
             .setAudioAttributes(audioAttrs, /* handleAudioFocus= */ true)
             .setHandleAudioBecomingNoisy(true)
             .build()
+        audioSessionId = exo.audioSessionId
         // Always advertise prev/next so the lock-screen and notification controls
         // show skip buttons. When the playlist has the adjacent item we let
         // ExoPlayer seek (gapless); otherwise the app controller resolves the
@@ -83,7 +164,12 @@ class PlaybackService : MediaSessionService() {
                 if (exo.currentMediaItemIndex > 0) super.seekToPreviousMediaItem() else previousHandler?.invoke()
             }
         }
-        mediaSession = MediaSession.Builder(this, player).build()
+        val session = MediaSession.Builder(this, player)
+            .setCallback(sessionCallback)
+            .build()
+        mediaSession = session
+        refreshButtons = { updateCustomLayout() }
+        updateCustomLayout()
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
@@ -96,6 +182,7 @@ class PlaybackService : MediaSessionService() {
             release()
             mediaSession = null
         }
+        refreshButtons = null
         super.onDestroy()
     }
 }
