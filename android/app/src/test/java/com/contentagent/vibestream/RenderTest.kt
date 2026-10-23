@@ -64,6 +64,30 @@ class RenderTest {
         snap(v, name, v.measuredWidth.coerceAtLeast(600), v.measuredHeight.coerceAtLeast(400))
     }
 
+    /** Phone-viewport-faithful: force the popup/sheet to exactly 1080x2400 like a device window. */
+    private fun snapViewport(activity: Activity, name: String) {
+        val wm = activity.getSystemService(android.content.Context.WINDOW_SERVICE) as android.view.WindowManager
+        val added = try { (Shadows.shadowOf(wm) as org.robolectric.shadows.ShadowWindowManagerImpl).views } catch (t: Throwable) { emptyList<android.view.View>() }
+        val v = added.lastOrNull() ?: activity.window.decorView
+        v.measure(
+            View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(2400, View.MeasureSpec.EXACTLY))
+        v.layout(0, 0, 1080, 2400)
+        snap(v, name, 1080, 2400)
+    }
+
+    /** Full-content variant: let the sheet measure its full scrollable height to prove nothing is clipped when space allows. */
+    private fun snapFullHeight(activity: Activity, name: String) {
+        val wm = activity.getSystemService(android.content.Context.WINDOW_SERVICE) as android.view.WindowManager
+        val added = try { (Shadows.shadowOf(wm) as org.robolectric.shadows.ShadowWindowManagerImpl).views } catch (t: Throwable) { emptyList<android.view.View>() }
+        val v = added.lastOrNull() ?: activity.window.decorView
+        v.measure(
+            View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(6000, View.MeasureSpec.AT_MOST))
+        v.layout(0, 0, 1080, v.measuredHeight)
+        snap(v, name, 1080, v.measuredHeight.coerceAtLeast(400))
+    }
+
     private fun scenario(block: (ComponentActivity) -> Unit) {
         ActivityScenario.launch(ComponentActivity::class.java).use { sc ->
             sc.onActivity(block)
@@ -199,7 +223,8 @@ class RenderTest {
                 }
             }
             pump(act)
-            snapDialog(act, "full-player-lyrics")
+            snapViewport(act, "full-player-lyrics")
+            snapFullHeight(act, "full-player-lyrics-fullheight")
         }
     }
 }
