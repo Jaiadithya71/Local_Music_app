@@ -54,7 +54,7 @@ class RenderTest {
         val dlg = ShadowDialog.getLatestDialog() ?: ShadowDialog.getShownDialogs().lastOrNull()
         // Compose ModalBottomSheet is a Popup, not a Dialog: check window-manager views too.
         val wm = activity.getSystemService(android.content.Context.WINDOW_SERVICE) as android.view.WindowManager
-        val added = try { Shadows.shadowOf(wm).views } catch (t: Throwable) { emptyList() }
+        val added = try { (Shadows.shadowOf(wm) as org.robolectric.shadows.ShadowWindowManagerImpl).views } catch (t: Throwable) { emptyList<android.view.View>() }
         val v = dlg?.window?.decorView ?: added.lastOrNull() ?: activity.window.decorView
         println("SNAP $name dialog=${dlg != null} addedViews=${added.size} using=${v.javaClass.simpleName}")
         v.measure(
