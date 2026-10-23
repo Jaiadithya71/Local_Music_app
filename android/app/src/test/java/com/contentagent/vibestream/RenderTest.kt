@@ -7,10 +7,8 @@ import android.os.Looper
 import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.ui.platform.AndroidComposeView
-import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.semantics.SemanticsNode
-import android.view.ViewGroup
+import android.os.SystemClock
+import android.view.MotionEvent
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.contentagent.vibestream.data.lyrics.LyricsRepository
@@ -86,18 +84,18 @@ class RenderTest {
         return added.lastOrNull() ?: activity.window.decorView
     }
 
-    private fun findAndroidComposeView(v: View): AndroidComposeView? {
-        if (v is AndroidComposeView) return v
-        if (v is ViewGroup) for (i in 0 until v.childCount) {
-            findAndroidComposeView(v.getChildAt(i))?.let { return it }
+    /** Dispatch a real upward drag gesture so the sheet's verticalScroll consumes it. */
+    private fun dragScrollUp(target: View, fromY: Float, toY: Float) {
+        val downTime = SystemClock.uptimeMillis()
+        var event = MotionEvent.obtain(downTime, downTime, MotionEvent.ACTION_DOWN, target.width / 2f, fromY, 0)
+        target.dispatchTouchEvent(event); event.recycle()
+        for (i in 1..10) {
+            val y = fromY + (toY - fromY) * i / 10
+            event = MotionEvent.obtain(downTime, downTime + i * 16L, MotionEvent.ACTION_MOVE, target.width / 2f, y, 0)
+            target.dispatchTouchEvent(event); event.recycle()
         }
-        return null
-    }
-
-    private fun scrollAllToBottom(node: SemanticsNode): Boolean {
-        var consumed = node.config.getOrNull(SemanticsActions.ScrollBy)?.action?.invoke(0f, 100000f) ?: false
-        node.children.forEach { if (scrollAllToBottom(it)) consumed = true }
-        return consumed
+        event = MotionEvent.obtain(downTime, downTime + 200, MotionEvent.ACTION_UP, target.width / 2f, toY, 0)
+        target.dispatchTouchEvent(event); event.recycle()
     }
 
     /** Full-content variant: let the sheet measure its full scrollable height to prove nothing is clipped when space allows. */
@@ -250,9 +248,13 @@ class RenderTest {
             snapViewport(act, "full-player-lyrics")
             snapFullHeight(act, "full-player-lyrics-fullheight")
             // Prove bottom content is scroll-reachable inside the phone viewport.
-            val composeView = findAndroidComposeView(popupRoot(act))
-            val scrolled = composeView?.let { scrollAllToBottom(it.semanticsOwner.rootSemanticsNode) } ?: false
-            println("SCROLL consumed=$scrolled")
+            val root = popupRoot(act)
+            root.measure(
+                View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(2400, View.MeasureSpec.EXACTLY))
+            root.layout(0, 0, 1080, 2400)
+            dragScrollUp(root, 2200f, 400f)
+            dragScrollUp(root, 2200f, 400f)
             pump(act)
             snapViewport(act, "full-player-lyrics-scrolled")
         }
