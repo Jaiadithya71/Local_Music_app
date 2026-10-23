@@ -22,6 +22,7 @@ import org.junit.runner.RunWith
 import org.robolectric.Shadows
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowDialog
+import org.robolectric.shadows.ShadowPopupWindow
 import java.io.File
 
 @RunWith(AndroidJUnit4::class)
@@ -52,7 +53,8 @@ class RenderTest {
 
     private fun snapDialog(activity: Activity, name: String) {
         val dlg = ShadowDialog.getLatestDialog() ?: ShadowDialog.getShownDialogs().lastOrNull()
-        val v = dlg?.window?.decorView ?: activity.window.decorView
+        val popup = ShadowPopupWindow.getLatestPopupWindow()?.contentView
+        val v = dlg?.window?.decorView ?: popup ?: activity.window.decorView
         v.measure(
             View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.AT_MOST),
             View.MeasureSpec.makeMeasureSpec(2400, View.MeasureSpec.AT_MOST))
@@ -79,7 +81,7 @@ class RenderTest {
             LyricsRepository.LyricLine(120_000, "Till the morning wakes")
         ))
 
-    @Test
+    @Test(timeout = 120000)
     fun render_lyricsSynced() {
         scenario { act ->
             act.setContent {
@@ -92,7 +94,7 @@ class RenderTest {
         }
     }
 
-    @Test
+    @Test(timeout = 120000)
     fun render_lyricsLoading() {
         scenario { act ->
             act.setContent {
@@ -103,7 +105,7 @@ class RenderTest {
         }
     }
 
-    @Test
+    @Test(timeout = 120000)
     fun render_lyricsPlainFallback() {
         scenario { act ->
             act.setContent {
@@ -120,7 +122,7 @@ class RenderTest {
         }
     }
 
-    @Test
+    @Test(timeout = 120000)
     fun render_sleepTimerDialog_picker() {
         scenario { act ->
             act.setContent {
@@ -136,7 +138,7 @@ class RenderTest {
         }
     }
 
-    @Test
+    @Test(timeout = 120000)
     fun render_sleepTimerDialog_countdown() {
         scenario { act ->
             act.setContent {
@@ -152,7 +154,7 @@ class RenderTest {
         }
     }
 
-    @Test
+    @Test(timeout = 120000)
     fun render_equalizerDialog() {
         scenario { act ->
             val eq = EqualizerManager(act)
@@ -169,7 +171,7 @@ class RenderTest {
         }
     }
 
-    @Test
+    @Test(timeout = 120000)
     fun render_fullPlayer_lyricsExpanded() {
         scenario { act ->
             act.setContent {
