@@ -25,21 +25,35 @@ class EqualizerManager(context: Context) {
     private val _bandLevels = MutableStateFlow<List<Short>>(emptyList())
     val bandLevels: StateFlow<List<Short>> = _bandLevels.asStateFlow()
 
+    // Test hooks: Robolectric has no audio session, so UI tests inject EQ state.
+    internal var testRangeOverride: Pair<Short, Short>? = null
+    internal var testPresetsOverride: List<String>? = null
+    internal var testPresetIndexOverride: Int? = null
+    internal var testBandFreqsHz: List<Int>? = null
+
     val bandLevelRange: Pair<Short, Short>?
-        get() = eq?.bandLevelRange?.let { it[0] to it[1] }
+        get() = testRangeOverride ?: eq?.bandLevelRange?.let { it[0] to it[1] }
 
     fun bandLabel(band: Int): String {
+        testBandFreqsHz?.getOrNull(band)?.let { hz ->
+            return if (hz >= 1000) "${hz / 1000}.${(hz % 1000) / 100}kHz" else "${hz}Hz"
+        }
         val hz = (eq?.getCenterFreq(band.toShort()) ?: 0) / 1000 // API returns millihertz
         return if (hz >= 1000) "${hz / 1000}.${(hz % 1000) / 100}kHz" else "${hz}Hz"
     }
 
-    fun presets(): List<String> = eq?.let { e ->
+    fun presets(): List<String> = testPresetsOverride ?: eq?.let { e ->
         (0 until e.numberOfPresets).mapNotNull {
             try { e.getPresetName(it.toShort()) } catch (t: Throwable) { null }
         }
     } ?: emptyList()
 
-    fun currentPresetIndex(): Int = try { eq?.currentPreset?.toInt() ?: -1 } catch (t: Throwable) { -1 }
+    fun currentPresetIndex(): Int = testPresetIndexOverride ?: try { eq?.currentPreset?.toInt() ?: -1 } catch (t: Throwable) { -1 }
+
+    internal fun setStateForTest(enabled: Boolean, levels: List<Short>) {
+        _enabled.value = enabled
+        _bandLevels.value = levels
+    }
 
     /** Attach to the player audio session when it exists. True when ready. */
     @Synchronized

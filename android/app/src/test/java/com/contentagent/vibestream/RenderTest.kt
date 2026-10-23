@@ -7,20 +7,16 @@ import android.os.Looper
 import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.platform.ComposeView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.contentagent.vibestream.data.local.LibraryStore
 import com.contentagent.vibestream.data.lyrics.LyricsRepository
-import com.contentagent.vibestream.data.model.LrcLine
 import com.contentagent.vibestream.data.model.Song
-import com.contentagent.vibestream.ui.player.SleepTimerDialog
-import com.contentagent.vibestream.ui.player.LyricsPanel
-import com.contentagent.vibestream.ui.player.PlayerScreen
-import com.contentagent.vibestream.ui.settings.EqualizerDialog
+import com.contentagent.vibestream.player.EqualizerManager
+import com.contentagent.vibestream.ui.components.EqualizerDialog
+import com.contentagent.vibestream.ui.components.FullPlayerSheet
+import com.contentagent.vibestream.ui.components.LyricsView
+import com.contentagent.vibestream.ui.components.SleepTimerDialog
 import com.contentagent.vibestream.ui.theme.VibeStreamTheme
-import com.contentagent.vibestream.viewmodel.PlayerViewModel
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Shadows
@@ -41,7 +37,7 @@ class RenderTest {
         activity.window.decorView.layout(0, 0, 1080, 2400)
     }
 
-    private fun snap(v: View, name: String, w: Int = 1080, h: Int = 2400) {
+    private fun snap(v: View, name: String, w: Int, h: Int) {
         val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
         c.drawColor(android.graphics.Color.rgb(0x0B, 0x0F, 0x14))
@@ -51,44 +47,48 @@ class RenderTest {
         println("RENDER ${f.absolutePath} ${f.length()}")
     }
 
+    private fun snapActivity(activity: Activity, name: String) =
+        snap(activity.window.decorView, name, 1080, 2400)
+
+    private fun snapDialog(activity: Activity, name: String) {
+        val dlg = ShadowDialog.getLatestDialog() ?: ShadowDialog.getShownDialogs().lastOrNull()
+        val v = dlg?.window?.decorView ?: activity.window.decorView
+        v.measure(
+            View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.AT_MOST),
+            View.MeasureSpec.makeMeasureSpec(2400, View.MeasureSpec.AT_MOST))
+        v.layout(0, 0, v.measuredWidth, v.measuredHeight)
+        snap(v, name, v.measuredWidth.coerceAtLeast(600), v.measuredHeight.coerceAtLeast(400))
+    }
+
     private fun scenario(block: (ComponentActivity) -> Unit) {
         ActivityScenario.launch(ComponentActivity::class.java).use { sc ->
             sc.onActivity(block)
         }
     }
 
-    private fun demoVm(act: ComponentActivity): PlayerViewModel {
-        val vm = PlayerViewModel(act.application)
-        vm.currentSong.value = Song("s1", "Neon Skyline", "Night Drive", 214)
-        vm.isPlaying.value = true
-        vm.positionMs.value = 62000
-        vm.durationMs.value = 214000
-        vm.sleepTimerEndsAtMs.value = null
-        vm.recentPlays.value = (1..12).map { PlayerViewModel.RecentPlay("s$it", System.currentTimeMillis() - it * 3600_000L) }
-        return vm
-    }
+    private fun demoSong() = Song(
+        id = "s1", title = "Neon Skyline", artist = "Night Drive",
+        durationSec = 214, durationText = "3:34")
+
+    private fun demoLyrics() = LyricsRepository.Lyrics(
+        synced = listOf(
+            LyricsRepository.LyricLine(0, "City lights in the rain"),
+            LyricsRepository.LyricLine(30_000, "We were chasing neon skies"),
+            LyricsRepository.LyricLine(60_000, "And the night was ours to take"),
+            LyricsRepository.LyricLine(90_000, "Every heartbeat synchronized"),
+            LyricsRepository.LyricLine(120_000, "Till the morning wakes")
+        ))
 
     @Test
     fun render_lyricsSynced() {
         scenario { act ->
             act.setContent {
                 VibeStreamTheme {
-                    LyricsPanel(
-                        lines = listOf(
-                            LrcLine(0, "City lights in the rain"),
-                            LrcLine(30_000, "We were chasing neon skies"),
-                            LrcLine(60_000, "And the night was ours to take"),
-                            LrcLine(90_000, "Every heartbeat synchronized"),
-                            LrcLine(120_000, "Till the morning wakes")
-                        ),
-                        activeIndex = 2,
-                        loading = false,
-                        onSeek = {}
-                    )
+                    LyricsView(loading = false, lyrics = demoLyrics(), positionMs = 62_000)
                 }
             }
             pump(act)
-            snap(act.window.decorView, "lyrics-synced")
+            snapActivity(act, "lyrics-synced")
         }
     }
 
@@ -96,76 +96,106 @@ class RenderTest {
     fun render_lyricsLoading() {
         scenario { act ->
             act.setContent {
-                VibeStreamTheme { LyricsPanel(lines = emptyList(), activeIndex = -1, loading = true, onSeek = {}) }
+                VibeStreamTheme { LyricsView(loading = true, lyrics = null, positionMs = 0) }
             }
             pump(act)
-            snap(act.window.decorView, "lyrics-loading")
+            snapActivity(act, "lyrics-loading")
         }
     }
 
     @Test
-    fun render_sleepTimerDialog() {
+    fun render_lyricsPlainFallback() {
         scenario { act ->
-            val vm = demoVm(act)
-            var show by androidx.compose.runtime.mutableStateOf(true)
             act.setContent {
                 VibeStreamTheme {
-                    PlayerScreen(vm = vm, store = LibraryStore(act), onClose = {}, onOpenTimer = { show = true })
-                    if (show) SleepTimerDialog(
-                        onPick = { _, _ -> show = false },
-                        onPickCustom = { _, _ -> show = false },
-                        onCancelTimer = { show = false },
-                        onDismiss = { show = false },
-                        activeEndsAtMs = null
-                    )
+                    LyricsView(
+                        loading = false,
+                        lyrics = LyricsRepository.Lyrics(
+                            plain = "City lights in the rain\nWe were chasing neon skies\nAnd the night was ours to take"),
+                        positionMs = 0)
                 }
             }
             pump(act)
-            val dlg = ShadowDialog.getLatestDialog() ?: ShadowDialog.getShownDialogs().lastOrNull()
-            snap((dlg?.window?.decorView ?: act.window.decorView), "sleep-timer-dialog")
+            snapActivity(act, "lyrics-plain")
+        }
+    }
+
+    @Test
+    fun render_sleepTimerDialog_picker() {
+        scenario { act ->
+            act.setContent {
+                VibeStreamTheme {
+                    SleepTimerDialog(
+                        endAtMs = null, endOfTrack = false,
+                        onPickMinutes = {}, onPickEndOfTrack = {},
+                        onCancelTimer = {}, onDismiss = {})
+                }
+            }
+            pump(act)
+            snapDialog(act, "sleep-timer-dialog")
+        }
+    }
+
+    @Test
+    fun render_sleepTimerDialog_countdown() {
+        scenario { act ->
+            act.setContent {
+                VibeStreamTheme {
+                    SleepTimerDialog(
+                        endAtMs = System.currentTimeMillis() + 15 * 60_000, endOfTrack = false,
+                        onPickMinutes = {}, onPickEndOfTrack = {},
+                        onCancelTimer = {}, onDismiss = {})
+                }
+            }
+            pump(act)
+            snapDialog(act, "sleep-timer-countdown")
         }
     }
 
     @Test
     fun render_equalizerDialog() {
         scenario { act ->
-            val vm = demoVm(act)
-            var show by androidx.compose.runtime.mutableStateOf(true)
+            val eq = EqualizerManager(act)
+            eq.testRangeOverride = (-1500).toShort() to (1500).toShort()
+            eq.testPresetsOverride = listOf("Normal", "Rock", "Bass Boost", "Vocal")
+            eq.testPresetIndexOverride = 1
+            eq.testBandFreqsHz = listOf(60, 230, 910, 3600, 14000)
+            eq.setStateForTest(true, listOf(400, 150, 0, -200, 300).map { it.toShort() })
             act.setContent {
-                VibeStreamTheme {
-                    PlayerScreen(vm = vm, store = LibraryStore(act), onClose = {}, onOpenTimer = { show = true })
-                    if (show) EqualizerDialog(vm = vm, onDismiss = { show = false })
-                }
+                VibeStreamTheme { EqualizerDialog(eq = eq, onDismiss = {}) }
             }
             pump(act)
-            val dlg = ShadowDialog.getLatestDialog() ?: ShadowDialog.getShownDialogs().lastOrNull()
-            snap((dlg?.window?.decorView ?: act.window.decorView), "equalizer-dialog")
+            snapDialog(act, "equalizer-dialog")
         }
     }
 
     @Test
     fun render_fullPlayer_lyricsExpanded() {
         scenario { act ->
-            val vm = demoVm(act)
-            val lyrics = LyricsRepository(act)
             act.setContent {
                 VibeStreamTheme {
-                    PlayerScreen(vm = vm, store = LibraryStore(act), onClose = {}, onOpenTimer = {})
-                    LaunchedEffect(Unit) {
-                        lyrics.cached.value = LyricsRepository.Cached(
-                            key = "x", synced = true,
-                            plain = "City lights in the rain\nWe were chasing neon skies",
-                            lines = listOf(
-                                LrcLine(30_000, "City lights in the rain"),
-                                LrcLine(62_000, "We were chasing neon skies"),
-                                LrcLine(90_000, "And the night was ours to take")
-                            ))
-                        vm.lyricsExpanded.value = true
-                    }
+                    FullPlayerSheet(
+                        song = demoSong(),
+                        isPlaying = true,
+                        isBuffering = false,
+                        currentPosition = 62_000,
+                        duration = 214_000,
+                        isDownloaded = false,
+                        isDownloading = false,
+                        downloadProgress = 0f,
+                        onTogglePlayPause = {}, onSeekTo = {},
+                        onSkipForward = {}, onSkipBackward = {},
+                        onDownloadClick = {}, onDismiss = {},
+                        showLyrics = true,
+                        sleepTimerActive = true,
+                        lyricsContent = {
+                            LyricsView(loading = false, lyrics = demoLyrics(), positionMs = 62_000)
+                        }
+                    )
                 }
             }
             pump(act)
-            snap(act.window.decorView, "full-player-lyrics")
+            snapDialog(act, "full-player-lyrics")
         }
     }
 }
