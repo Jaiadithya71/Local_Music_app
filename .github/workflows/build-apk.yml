@@ -59,14 +59,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          VN=$(grep -oP 'versionName = "\K[^"]+' android/app/build.gradle.kts)
+          TAG="v$VN"
           cp android/app/build/outputs/apk/debug/app-debug.apk VibeStream-debug.apk
-          gh release delete v1.0.1 --yes --cleanup-tag || true
-          for attempt in 1 2 3; do
-            if gh release create v1.0.1 VibeStream-debug.apk --target "$GITHUB_SHA" --title "v1.0.1 debug (fixes compiled)" --notes "Debug APK built by CI. Personal sideload only."; then
-              break
-            fi
-            echo "release create attempt $attempt failed; retrying in 20s"
-            sleep 20
-            gh release delete v1.0.1 --yes --cleanup-tag || true
-          done
-          gh release view v1.0.1 --json tagName --jq .tagName
+          # New release per version; previous releases and their artifacts are preserved.
+          # --clobber only replaces the asset when re-building the SAME version tag.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" VibeStream-debug.apk --clobber
+          else
+            for attempt in 1 2 3; do
+              if gh release create "$TAG" VibeStream-debug.apk --target "$GITHUB_SHA" --title "$TAG debug" --notes "Debug APK built by CI. Personal sideload only."; then
+                break
+              fi
+              echo "release create attempt $attempt failed; retrying in 20s"
+              sleep 20
+            done
+          fi
+          gh release view "$TAG" --json tagName --jq .tagName
