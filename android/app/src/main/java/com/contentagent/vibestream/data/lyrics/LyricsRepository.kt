@@ -52,7 +52,7 @@ class LyricsRepository(context: Context) {
                 .build()
             client.newCall(req).execute().use { resp ->
                 if (!resp.isSuccessful) return null
-                val body = resp.body.string()
+                val body = resp.body?.string() ?: return null
                 val obj = gson.fromJson(body, JsonObject::class.java)
                 val synced = if (obj.has("syncedLyrics") && !obj.get("syncedLyrics").isJsonNull)
                     parseLrc(obj.get("syncedLyrics").asString) else emptyList()
