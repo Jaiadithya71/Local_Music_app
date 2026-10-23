@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.contentagent.vibestream.RenderTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-10-23T08:00:12" hostname="e2b.local" time="8.256">
+  <properties/>
+  <testcase name="render_fullPlayer_lyricsExpanded" classname="com.contentagent.vibestream.RenderTest" time="8.256"/>
+  <system-out><![CDATA[RENDER /home/sandbox/renders/full-player-lyrics.png 41414
+RENDER /home/sandbox/renders/full-player-lyrics-fullheight.png 67937
+RENDER /home/sandbox/renders/full-player-lyrics-scrolled.png 44748
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
