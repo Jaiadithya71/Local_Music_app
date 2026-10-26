@@ -90,6 +90,8 @@ fun HomeScreen(
     val downloadedSongs by offlineStorage.downloadedSongs.collectAsState()
     val downloadProgressMap by downloadManager.downloadProgressMap.collectAsState()
     val currentSong by playerController.currentSong.collectAsState()
+    val automaticNaming by playerController.analysisEnabled.collectAsState()
+    val analysisStatus by playerController.analysisStatus.collectAsState()
     val isPlaying by playerController.isPlaying.collectAsState()
     val isBuffering by playerController.isBuffering.collectAsState()
     val currentPosition by playerController.currentPosition.collectAsState()
@@ -757,6 +759,9 @@ fun HomeScreen(
 
         FullPlayerSheet(
             song = song,
+            automaticNaming = automaticNaming,
+            analysisStatus = analysisStatus,
+            onAutomaticNaming = { playerController.setAutomaticAnalysis(it) },
             isPlaying = isPlaying,
             isBuffering = isBuffering,
             currentPosition = currentPosition,

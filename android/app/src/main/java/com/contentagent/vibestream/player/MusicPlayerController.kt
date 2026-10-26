@@ -35,6 +35,57 @@ class MusicPlayerController(
     private val queueStore: com.contentagent.vibestream.data.local.QueueStore? = null
 ) {
 
+    private val compilationCache = com.contentagent.vibestream.data.analysis.CompilationCache(context)
+    private val _analysisEnabled = MutableStateFlow(compilationCache.enabled)
+    val analysisEnabled = _analysisEnabled.asStateFlow()
+    private val _analysisStatus = MutableStateFlow("")
+    val analysisStatus = _analysisStatus.asStateFlow()
+    private var analysisJob: Job? = null
+    private val attemptedAnalysis = mutableSetOf<String>()
+    fun setAutomaticAnalysis(enabled: Boolean) {
+        compilationCache.enabled = enabled
+        _analysisEnabled.value = enabled
+        if (!enabled) { analysisJob?.cancel(); _analysisStatus.value = "Automatic naming off" }
+        else { attemptedAnalysis.clear(); _currentSong.value?.let { maybeAnalyze(it) } }
+    }
+    private fun attachChapters(song: Song, points: List<com.contentagent.vibestream.data.chapters.SongChapter>) {
+        val player = controller ?: return
+        if (player.currentMediaItem?.mediaId != song.id) return
+        val enriched = song.copy(chapters = points)
+        _queue.value = _queue.value.map { if (it.id == song.id) enriched else it }
+        _currentSong.value = enriched
+        val old = player.currentMediaItem ?: return
+        player.replaceMediaItem(player.currentMediaItemIndex, old.buildUpon().setMediaMetadata(old.mediaMetadata.buildUpon()
+            .setExtras(ChapterNavigation.extras(points)).build()).build())
+        persistQueue()
+    }
+    private fun maybeAnalyze(song: Song) {
+        if (song.chapters.orEmpty().size >= 2) return
+        compilationCache.get(song.id)?.let { attachChapters(song,it); return }
+        if (!_analysisEnabled.value || song.id in attemptedAnalysis) return
+        val length = (controller?.duration ?: 0L).takeIf { it > 0 } ?: song.durationSec * 1000
+        if (length !in 600000..10800000) return
+        val source = song.playableUri ?: controller?.currentMediaItem?.localConfiguration?.uri?.toString() ?: return
+        attemptedAnalysis.add(song.id)
+        analysisJob?.cancel()
+        _analysisStatus.value = "Naming songs automatically..."
+        analysisJob = playerScope.launch {
+            val ownerJob = coroutineContext[Job]!!
+            try {
+                val result = kotlinx.coroutines.withContext(Dispatchers.IO) {
+                    com.contentagent.vibestream.data.analysis.CompilationIndexer().index(source,length,
+                        cancelled = { !ownerJob.isActive }, progress = { count,total ->
+                            _analysisStatus.value = "Naming songs: $count checks (about $total initial windows)"
+                        })
+                }
+                compilationCache.save(song.id,result.chapters)
+                attachChapters(song,result.chapters)
+                _analysisStatus.value = "Automatic naming finished. Boundaries are approximate; misses stay Unknown."
+            } catch (_:kotlinx.coroutines.CancellationException) { throw kotlinx.coroutines.CancellationException() }
+            catch (e:Exception) { _analysisStatus.value = "Naming unavailable: ${e.message?.take(90)}. No guessed names." }
+        }
+    }
+
     private val playerScope = CoroutineScope(Dispatchers.Main + Job())
     private var progressTrackerJob: Job? = null
 
@@ -269,6 +320,7 @@ class MusicPlayerController(
                         _isBuffering.value = false
                         val d = controller?.duration ?: 0L
                         if (d > 0) _duration.value = d
+                        _currentSong.value?.let { maybeAnalyze(it) }
                     }
                     Player.STATE_ENDED -> {
                         _isBuffering.value = false
@@ -476,6 +528,7 @@ class MusicPlayerController(
             player.replaceMediaItem(index, old.buildUpon().setMediaMetadata(old.mediaMetadata.buildUpon()
                 .setExtras(ChapterNavigation.extras(chapters)).build()).build())
             persistQueue()
+            maybeAnalyze(_currentSong.value ?: song)
         }
     }
 
@@ -515,6 +568,8 @@ class MusicPlayerController(
     }
 
     private fun startPlayback(song: Song) {
+        analysisJob?.cancel()
+        _analysisStatus.value = ""
         playbackGeneration++
         val generation = playbackGeneration
         prefetchJob?.cancel()

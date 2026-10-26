@@ -59,6 +59,9 @@ fun FullPlayerSheet(
     onSleepTimer: () -> Unit = {},
     onEqualizer: () -> Unit = {},
     sleepTimerActive: Boolean = false,
+    automaticNaming: Boolean = false,
+    analysisStatus: String = "",
+    onAutomaticNaming: (Boolean) -> Unit = {},
     lyricsContent: (@Composable () -> Unit)? = null
 ) {
     val playerSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -142,6 +145,20 @@ fun FullPlayerSheet(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            if (song.durationSec >= 600 || duration >= 600000) {
+                var confirmNaming by remember { mutableStateOf(false) }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Automatically name songs", color = TextPrimary, modifier = Modifier.weight(1f), fontSize = 14.sp)
+                    Switch(checked = automaticNaming, onCheckedChange = { if (it) confirmNaming = true else onAutomaticNaming(false) })
+                }
+                if (analysisStatus.isNotBlank()) Text(analysisStatus, color = TextSecondary, fontSize = 12.sp)
+                if (confirmNaming) AlertDialog(onDismissRequest = { confirmNaming = false },
+                    title = { Text("Enable automatic song naming?") },
+                    text = { Text("For each new 10-minute to 3-hour recording you play, audio fingerprints will be sent to an unofficial Shazam connection. This reveals what's playing. No microphone or whole audio is uploaded. Uses extra data, battery and processing time. Names can be wrong; misses stay Unknown and song starts are approximate. The service may stop working. You can turn this off anytime.") },
+                    confirmButton = { TextButton(onClick = { confirmNaming = false; onAutomaticNaming(true) }) { Text("Enable") } },
+                    dismissButton = { TextButton(onClick = { confirmNaming = false }) { Text("Cancel") } })
+                Spacer(Modifier.height(8.dp))
+            }
             val chapters = song.chapters.orEmpty()
             if (chapters.size >= 2) {
                 val chapterIndex = chapters.indexOfLast { it.startMs <= currentPosition }.coerceAtLeast(0)
