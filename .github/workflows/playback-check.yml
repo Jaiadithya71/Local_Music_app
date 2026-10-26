@@ -22,7 +22,7 @@ jobs:
           sudo udevadm trigger --name-match=kvm
       - name: Logic regression
         working-directory: android
-        run: ./gradlew --no-daemon testDebugUnitTest --tests '*MixBuilderTest' --tests '*PersistenceTest' --tests '*MusicSearchPolicyTest' --tests '*SongChaptersTest' --tests '*ChapterPersistenceTest' --tests '*RecognitionTimelineTest' --tests '*AudioFingerprintTest'
+        run: ./gradlew --no-daemon testDebugUnitTest --tests '*MixBuilderTest' --tests '*PersistenceTest' --tests '*MusicSearchPolicyTest' --tests '*SongChaptersTest' --tests '*ChapterPersistenceTest' --tests '*RecognitionTimelineTest' --tests '*AudioFingerprintTest' --tests '*RecognitionMatchTest'
       - name: Preserve logic evidence
         working-directory: android
         run: |

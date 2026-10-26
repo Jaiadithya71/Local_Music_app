@@ -33,12 +33,12 @@ class AudioWindowDecoder {
             var rate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
             var channels = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
             var encoding = AudioFormat.ENCODING_PCM_16BIT
-            val output = ArrayList<Short>(seconds * 16000)
+            val raw = ArrayList<Float>()
+            var rawStartUs: Long? = null
             val info = MediaCodec.BufferInfo()
             val endUs = (startMs + seconds * 1000) * 1000
             val deadline = System.nanoTime() + 30_000_000_000L
-            var nextOutputUs = startMs * 1000.0
-            while (!outputDone && output.size < seconds * 16000) {
+            while (!outputDone) {
                 check(!cancelled()) { "Analysis cancelled" }
                 check(System.nanoTime() < deadline) { "Audio window decode timed out" }
                 if (!inputDone) {
@@ -80,11 +80,9 @@ class AudioWindowDecoder {
                                         buffer.float.toDouble().coerceIn(-1.0, 1.0) * 32767 else buffer.short.toDouble()
                                 }
                                 val timeUs = info.presentationTimeUs + frame * 1_000_000.0 / rate
-                                // Nearest-neighbor feasibility output, not a production
-                                // fingerprint resampler. Handles low source rates too.
-                                while (timeUs >= nextOutputUs && nextOutputUs < endUs && output.size < seconds * 16000) {
-                                    output.add((mono / channels).toInt().coerceIn(-32768, 32767).toShort())
-                                    nextOutputUs += 1_000_000.0 / 16000
+                                if (timeUs >= startMs * 1000 && timeUs < endUs) {
+                                    if (rawStartUs == null) rawStartUs = timeUs.toLong()
+                                    raw.add((mono / channels).toFloat())
                                 }
                             }
                         }
@@ -93,10 +91,31 @@ class AudioWindowDecoder {
                     }
                 }
             }
-            return Window(startMs, output.toShortArray())
+            return Window(startMs, resample(raw,rate))
         } finally {
             try { codec?.stop() } catch (_: Exception) { }
             codec?.release(); extractor.release()
         }
     }
+    private fun resample(input: List<Float>, sourceRate: Int): ShortArray {
+        val count=(input.size.toLong()*16000/sourceRate).toInt()
+        val cutoff=minOf(1.0,16000.0/sourceRate)*0.94
+        val radius=24
+        return ShortArray(count) { index ->
+            val position=index*sourceRate/16000.0
+            var sum=0.0;var weight=0.0
+            val center=position.toInt()
+            for (j in center-radius..center+radius) {
+                if (j !in input.indices) continue
+                val distance=position-j
+                val x=Math.PI*distance*cutoff
+                val sinc=if(kotlin.math.abs(x)<1e-10) 1.0 else kotlin.math.sin(x)/x
+                val window=0.5+0.5*kotlin.math.cos(Math.PI*distance/(radius+1))
+                val w=sinc*cutoff*window
+                sum+=input[j]*w;weight+=w
+            }
+            (if(weight==0.0) 0 else (sum/weight).toInt()).coerceIn(-32768,32767).toShort()
+        }
+    }
+
 }
