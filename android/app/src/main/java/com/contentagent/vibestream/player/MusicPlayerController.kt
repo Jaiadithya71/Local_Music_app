@@ -51,7 +51,7 @@ class MusicPlayerController(
     private fun attachChapters(song: Song, points: List<com.contentagent.vibestream.data.chapters.SongChapter>) {
         val player = controller ?: return
         if (player.currentMediaItem?.mediaId != song.id) return
-        val enriched = song.copy(chapters = points)
+        val enriched = song.copy(chapters = points, automaticChapters = true)
         _queue.value = _queue.value.map { if (it.id == song.id) enriched else it }
         _currentSong.value = enriched
         val old = player.currentMediaItem ?: return
@@ -61,7 +61,6 @@ class MusicPlayerController(
     }
     private fun maybeAnalyze(song: Song) {
         if (song.chapters.orEmpty().size >= 2) return
-        compilationCache.get(song.id)?.let { attachChapters(song,it); return }
         if (!_analysisEnabled.value || song.id in attemptedAnalysis) return
         val length = (controller?.duration ?: 0L).takeIf { it > 0 } ?: song.durationSec * 1000
         if (length !in 600000..10800000) return
@@ -72,13 +71,21 @@ class MusicPlayerController(
         analysisJob = playerScope.launch {
             val ownerJob = coroutineContext[Job]!!
             try {
+                val version = kotlinx.coroutines.withContext(Dispatchers.IO) {
+                    com.contentagent.vibestream.data.analysis.CompilationContentVersion.of(source) { !ownerJob.isActive }
+                }
+                version?.let { compilationCache.get(it) }?.let { attachChapters(song,it); _analysisStatus.value = "Loaded locally cached names for this exact content"; return@launch }
                 val result = kotlinx.coroutines.withContext(Dispatchers.IO) {
                     com.contentagent.vibestream.data.analysis.CompilationIndexer().index(source,length,
                         cancelled = { !ownerJob.isActive }, progress = { count,total ->
                             _analysisStatus.value = "Naming songs: $count checks (about $total initial windows)"
                         })
                 }
-                compilationCache.save(song.id,result.chapters)
+                val currentVersion = kotlinx.coroutines.withContext(Dispatchers.IO) {
+                    version?.let { com.contentagent.vibestream.data.analysis.CompilationContentVersion.of(source) { !ownerJob.isActive } }
+                }
+                check(version == currentVersion) { "Source changed during analysis" }
+                if (version != null) compilationCache.save(version,result.chapters)
                 attachChapters(song,result.chapters)
                 _analysisStatus.value = "Automatic naming finished. Boundaries are approximate; misses stay Unknown."
             } catch (_:kotlinx.coroutines.CancellationException) { throw kotlinx.coroutines.CancellationException() }
@@ -571,7 +578,9 @@ class MusicPlayerController(
         startPlayback(song)
     }
 
-    private fun startPlayback(song: Song) {
+    private fun startPlayback(requested: Song) {
+        val song = if (requested.automaticChapters) requested.copy(chapters = null, automaticChapters = false) else requested
+        _queue.value = _queue.value.map { if(it.id == song.id) song else it }
         analysisJob?.cancel()
         _analysisStatus.value = ""
         playbackGeneration++

@@ -5,6 +5,16 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class CompilationIndexerTest {
+ @Test fun contentIdentityInvalidatesSamePathSizeAndTimestampReplacement() {
+  val f=java.io.File.createTempFile("source-version",".pcm")
+  try {
+   f.writeBytes(byteArrayOf(1,2,3));val time=f.lastModified()
+   val first=com.contentagent.vibestream.data.analysis.CompilationContentVersion.of(f.path)
+   f.writeBytes(byteArrayOf(3,2,1));f.setLastModified(time)
+   assertNotEquals(first,com.contentagent.vibestream.data.analysis.CompilationContentVersion.of(f.path))
+   assertNull(com.contentagent.vibestream.data.analysis.CompilationContentVersion.of("https://example.invalid/audio"))
+  } finally { f.delete() }
+ }
  @Test fun automaticNewFileUsesObservedNamesAndRefinesUnequalBoundaries() {
   var position=0L;var calls=0
   val indexer=CompilationIndexer(decode={_,start,_->position=start;ShortArray(48000)},recognize={

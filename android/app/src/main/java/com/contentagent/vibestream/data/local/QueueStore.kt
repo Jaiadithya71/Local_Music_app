@@ -23,7 +23,7 @@ class QueueStore(context: Context) {
     )
 
     fun save(songs: List<Song>, index: Int, positionMs: Long, shuffle: Boolean, repeat: Int) {
-        val clean = songs.map { it.copy(streamUrl = null, isDownloading = false, downloadProgress = 0f) }
+        val clean = songs.map { it.copy(chapters = if(it.automaticChapters) null else it.chapters, automaticChapters = false, streamUrl = null, isDownloading = false, downloadProgress = 0f) }
         prefs.edit()
             .putString("songs", gson.toJson(clean))
             .putInt("index", index)

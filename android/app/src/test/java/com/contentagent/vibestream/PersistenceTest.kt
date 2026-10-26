@@ -18,6 +18,13 @@ class PersistenceTest {
     private fun song(id: String, stream: String? = null) =
         Song(id = id, title = "Title$id", artist = "Artist$id", durationSec = 200, streamUrl = stream)
 
+    @Test fun automaticallyRecognizedCuesCannotBypassContentValidationAfterRestore() {
+        val store=QueueStore(ctx)
+        store.save(listOf(song("automatic").copy(automaticChapters=true,chapters=listOf(
+            com.contentagent.vibestream.data.chapters.SongChapter("Old name",0)))),0,0,false,0)
+        assertNull(store.load()!!.songs.single().chapters)
+        assertFalse(store.load()!!.songs.single().automaticChapters)
+    }
     @Test
     fun queueStore_roundtrip_stripsSecretsAndKeepsState() {
         ctx.getSharedPreferences("vibestream_queue", 0).edit().clear().commit()

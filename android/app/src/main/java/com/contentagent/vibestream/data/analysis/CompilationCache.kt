@@ -10,7 +10,7 @@ class CompilationCache(context: Context) {
   get()=prefs.getBoolean("enabled",false)
   set(value){prefs.edit().putBoolean("enabled",value).apply()}
  fun get(id:String):List<SongChapter>?=try {
-  prefs.getString("cue_$id",null)?.let { Gson().fromJson(it,object:TypeToken<List<SongChapter>>(){}.type) }
+  prefs.getString("v2_content_$id",null)?.let { Gson().fromJson(it,object:TypeToken<List<SongChapter>>(){}.type) }
  }catch(_:Exception){null}
- fun save(id:String,chapters:List<SongChapter>){prefs.edit().putString("cue_$id",Gson().toJson(chapters)).apply()}
+ fun save(id:String,chapters:List<SongChapter>){prefs.edit().putString("v2_content_$id",Gson().toJson(chapters)).apply()}
 }
