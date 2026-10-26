@@ -72,7 +72,7 @@ private fun saveMoodMix(ctx: android.content.Context, songs: List<Song>) {
 private fun shelfPrefs(ctx: android.content.Context) =
     ctx.getSharedPreferences("vibestream_shelves", android.content.Context.MODE_PRIVATE)
 
-private fun cacheKey(query: String, musicOnly: Boolean) = (if (musicOnly) "M|" else "A|") + query
+private fun cacheKey(query: String, musicOnly: Boolean) = "v2|" + (if (musicOnly) "M|" else "A|") + query
 
 private fun restoreShelves(ctx: android.content.Context, queries: List<String>, musicOnly: Boolean) {
     val gson = com.google.gson.Gson()
@@ -187,13 +187,10 @@ fun HomeShelves(
         profile.moods.take(2).map { mood ->
             mood to "${profile.languages.firstOrNull()?.plus(" ") ?: ""}$mood songs"
         }
-    val shelfList = remember(topArtist) {
-        val topQuery = when {
-            topArtist != null -> "$topArtist songs"
-            profile.artists.isNotEmpty() -> "${profile.artists.first()} songs"
-            else -> "trending songs"
-        }
-        listOf("Top picks for you" to topQuery) + tasteShelves.ifEmpty { shelves.drop(1) }
+    val homeSeed = com.contentagent.vibestream.data.recommendation.HomeRecommendation.seed(
+        liked, recent, profile.languages, profile.artists)
+    val shelfList = remember(homeSeed, profile) {
+        listOf(homeSeed.label to homeSeed.query) + tasteShelves.ifEmpty { shelves.drop(1) }
     }
     val seedQueries = com.contentagent.vibestream.data.recommendation.TasteQueries.seeds(
         profile.languages, profile.moods, profile.artists)
@@ -412,14 +409,7 @@ fun HomeShelves(
                             Column(
                                 modifier = Modifier.width(140.dp).clickable { onPlay(song, list) }
                             ) {
-                                AsyncImage(
-                                    model = song.thumbnailUrl,
-                                    contentDescription = song.title,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier
-                                        .size(140.dp)
-                                        .clip(RoundedCornerShape(6.dp))
-                                )
+                                ShelfArtwork(song)
                                 Spacer(Modifier.height(6.dp))
                                 Text(
                                     song.title,
@@ -469,5 +459,21 @@ fun HomeShelves(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ShelfArtwork(song: Song) {
+    var failed by remember(song.id, song.thumbnailUrl) { mutableStateOf(false) }
+    Box(modifier = Modifier.size(140.dp).clip(RoundedCornerShape(6.dp)).background(DarkSurfaceElevated),
+        contentAlignment = androidx.compose.ui.Alignment.Center) {
+        Text("♪", color = TextSecondary, fontSize = 32.sp)
+        AsyncImage(
+            model = if (failed || song.thumbnailUrl.isBlank()) "https://i.ytimg.com/vi/${song.id}/hqdefault.jpg" else song.thumbnailUrl,
+            contentDescription = song.title,
+            contentScale = ContentScale.Crop,
+            onError = { failed = true },
+            modifier = Modifier.fillMaxSize()
+        )
     }
 }

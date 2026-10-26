@@ -69,4 +69,16 @@ class MixBuilderTest {
         val seeds = com.contentagent.vibestream.data.recommendation.TasteQueries.seeds(listOf("  "), emptyList(), emptyList())
         assertEquals(3, seeds.size)
     }
+
+    @Test fun emptyLibraryStillUsesRecentTitlesNotVideoUploader() {
+        val seed = com.contentagent.vibestream.data.recommendation.HomeRecommendation.seed(emptyList(),
+            listOf(song("a", "Publisher channel", "Known track | video")), emptyList(), emptyList())
+        assertEquals("Known track songs", seed.query)
+        assertFalse(seed.query.contains("Publisher"))
+        assertTrue(seed.label.startsWith("Because you played"))
+    }
+    @Test fun coldStartIsNotFalselyLabeledPersonalized() {
+        val seed = com.contentagent.vibestream.data.recommendation.HomeRecommendation.seed(emptyList(),emptyList(),emptyList(),emptyList())
+        assertEquals("Explore music", seed.label)
+    }
 }
