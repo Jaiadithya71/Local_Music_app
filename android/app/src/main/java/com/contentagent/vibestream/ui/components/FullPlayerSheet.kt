@@ -61,7 +61,9 @@ fun FullPlayerSheet(
     sleepTimerActive: Boolean = false,
     lyricsContent: (@Composable () -> Unit)? = null
 ) {
+    val playerSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
+        sheetState = playerSheetState,
         onDismissRequest = onDismiss,
         containerColor = DarkBackground,
         dragHandle = {

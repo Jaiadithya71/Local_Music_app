@@ -29,7 +29,11 @@ class CompilationIndexer {
             Thread.sleep(1200)
             return point
         }
-        for (start in starts) sample(start)
+        for (start in starts) {
+            val point=sample(start)
+            // A second independent nearby window confirms each provisional identity.
+            if (point.recordingId != null && start+12000 < durationMs-12000) sample(start+12000)
+        }
         // Refine changes, but avoid claiming the sample grid is an exact song start.
         for ((a,b) in starts.zipWithNext()) {
             if (observations[a]?.recordingId == observations[b]?.recordingId) continue

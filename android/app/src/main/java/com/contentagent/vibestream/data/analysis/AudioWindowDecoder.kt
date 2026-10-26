@@ -34,7 +34,7 @@ class AudioWindowDecoder {
             var channels = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
             var encoding = AudioFormat.ENCODING_PCM_16BIT
             val raw = ArrayList<Float>()
-            var rawStartUs: Long? = null
+
             val info = MediaCodec.BufferInfo()
             val endUs = (startMs + seconds * 1000) * 1000
             val deadline = System.nanoTime() + 30_000_000_000L
@@ -81,7 +81,6 @@ class AudioWindowDecoder {
                                 }
                                 val timeUs = info.presentationTimeUs + frame * 1_000_000.0 / rate
                                 if (timeUs >= startMs * 1000 && timeUs < endUs) {
-                                    if (rawStartUs == null) rawStartUs = timeUs.toLong()
                                     raw.add((mono / channels).toFloat())
                                 }
                             }

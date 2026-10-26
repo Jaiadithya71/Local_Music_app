@@ -17,6 +17,7 @@ object RecognitionMatch {
         if (!offset.isFinite() || offset < 0) return null
         val track = json.getAsJsonObject("track") ?: return null
         val id = track.get("key")?.asString ?: return null
+        if (match.get("id")?.asString != id) return null
         val title = track.get("title")?.asString?.takeIf { it.isNotBlank() } ?: return null
         return Match(id, title, track.get("subtitle")?.asString.orEmpty(), (offset * 1000).toLong())
     }
