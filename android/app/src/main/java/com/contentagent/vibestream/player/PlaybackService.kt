@@ -181,16 +181,24 @@ class PlaybackService : MediaSessionService() {
                     .build()
             }
             override fun seekToNext() {
-                if (exo.hasNextMediaItem()) super.seekToNextMediaItem() else nextHandler?.invoke()
+                val boundary = ChapterNavigation.next(exo.currentMediaItem, exo.currentPosition)
+                if (boundary != null) exo.seekTo(boundary)
+                else if (exo.hasNextMediaItem()) super.seekToNextMediaItem() else nextHandler?.invoke()
             }
             override fun seekToNextMediaItem() {
-                if (exo.hasNextMediaItem()) super.seekToNextMediaItem() else nextHandler?.invoke()
+                val boundary = ChapterNavigation.next(exo.currentMediaItem, exo.currentPosition)
+                if (boundary != null) exo.seekTo(boundary)
+                else if (exo.hasNextMediaItem()) super.seekToNextMediaItem() else nextHandler?.invoke()
             }
             override fun seekToPrevious() {
-                if (exo.currentMediaItemIndex > 0) super.seekToPreviousMediaItem() else previousHandler?.invoke()
+                val boundary = ChapterNavigation.previous(exo.currentMediaItem, exo.currentPosition)
+                if (boundary != null) exo.seekTo(boundary)
+                else if (exo.currentMediaItemIndex > 0) super.seekToPreviousMediaItem() else previousHandler?.invoke()
             }
             override fun seekToPreviousMediaItem() {
-                if (exo.currentMediaItemIndex > 0) super.seekToPreviousMediaItem() else previousHandler?.invoke()
+                val boundary = ChapterNavigation.previous(exo.currentMediaItem, exo.currentPosition)
+                if (boundary != null) exo.seekTo(boundary)
+                else if (exo.currentMediaItemIndex > 0) super.seekToPreviousMediaItem() else previousHandler?.invoke()
             }
         }
         val session = MediaSession.Builder(this, player)

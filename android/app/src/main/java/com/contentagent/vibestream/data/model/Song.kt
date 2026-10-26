@@ -14,6 +14,7 @@ data class Song(
     var isDownloaded: Boolean = false,
     val kind: String = "song", // "song" (YouTube Music) or "video" (YouTube-wide)
     var isDownloading: Boolean = false,
+    var chapters: List<com.contentagent.vibestream.data.chapters.SongChapter>? = null,
     var downloadProgress: Float = 0f
 ) : Serializable {
     /**

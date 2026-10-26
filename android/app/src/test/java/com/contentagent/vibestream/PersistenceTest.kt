@@ -100,3 +100,23 @@ class LrcParseTest {
         assertEquals("hello", lines[0].text)
     }
 }
+
+@RunWith(AndroidJUnit4::class)
+class ChapterPersistenceTest {
+    private val ctx: Context get() = ApplicationProvider.getApplicationContext()
+    @Test fun chaptersSurviveQueueSaveWithoutStreamUrls() {
+        val points = listOf(com.contentagent.vibestream.data.chapters.SongChapter("A", 0), com.contentagent.vibestream.data.chapters.SongChapter("B", 268000))
+        val song = Song("compilation", "Fixture", "Test", chapters = points, streamUrl = "https://expired")
+        QueueStore(ctx).save(listOf(song), 0, 280000, false, 0)
+        val restored = QueueStore(ctx).load()!!
+        assertEquals(points, restored.songs.single().chapters)
+        assertNull(restored.songs.single().streamUrl)
+        val extras = com.contentagent.vibestream.player.ChapterNavigation.extras(points)
+        val item = androidx.media3.common.MediaItem.Builder().setMediaMetadata(androidx.media3.common.MediaMetadata.Builder().setExtras(extras).build()).build()
+        assertEquals(268000L, com.contentagent.vibestream.player.ChapterNavigation.next(item, 1000))
+    }
+    @Test fun oldJsonWithoutChaptersRemainsReadable() {
+        ctx.getSharedPreferences("vibestream_queue", 0).edit().putString("songs", """[{"id":"old","title":"Old","artist":"Test"}]""").putInt("index",0).commit()
+        assertNull(QueueStore(ctx).load()!!.songs.single().chapters)
+    }
+}

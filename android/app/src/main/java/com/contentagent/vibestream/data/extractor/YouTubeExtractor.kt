@@ -25,6 +25,31 @@ class YouTubeExtractor {
         .followRedirects(true)
         .build()
 
+    private val chapterCache = java.util.concurrent.ConcurrentHashMap<String, List<com.contentagent.vibestream.data.chapters.SongChapter>>()
+    fun cachedChapters(videoId: String) = chapterCache[videoId]
+
+    private fun rememberChapters(videoId: String, info: org.schabi.newpipe.extractor.stream.StreamInfo) {
+        val policy = com.contentagent.vibestream.data.chapters.SongChapters
+        val native = policy.validated(info.streamSegments.map {
+            com.contentagent.vibestream.data.chapters.SongChapter(it.title, it.startTimeSeconds * 1000L)
+        }, info.duration * 1000)
+        val description = if (info.description.type == org.schabi.newpipe.extractor.stream.Description.HTML)
+            android.text.Html.fromHtml(info.description.content
+                .replace(Regex("(?i)<br\\s*/?>|</p>|</div>"), "<br>"), android.text.Html.FROM_HTML_MODE_LEGACY).toString()
+            else info.description.content
+        chapterCache[videoId] = native.ifEmpty { policy.fromDescription(description, info.duration * 1000) }
+    }
+
+    suspend fun resolveChapters(videoId: String): List<com.contentagent.vibestream.data.chapters.SongChapter>? = withContext(Dispatchers.IO) {
+        chapterCache[videoId]?.let { return@withContext it }
+        try {
+            NewPipeBootstrap.ensureInit(client)
+            val info = org.schabi.newpipe.extractor.stream.StreamInfo.getInfo("https://www.youtube.com/watch?v=$videoId")
+            rememberChapters(videoId, info)
+            chapterCache[videoId]
+        } catch (e: Exception) { null }
+    }
+
     // Resilient public API mirrors for decentralized on-device extraction
     private val apiMirrors = listOf(
         "https://pipedapi.kavin.rocks",
@@ -327,6 +352,7 @@ class YouTubeExtractor {
             val info = org.schabi.newpipe.extractor.stream.StreamInfo.getInfo(
                 "https://www.youtube.com/watch?v=$videoId"
             )
+            rememberChapters(videoId, info)
             val progressive = info.audioStreams.filter {
                 it.deliveryMethod == org.schabi.newpipe.extractor.stream.DeliveryMethod.PROGRESSIVE_HTTP &&
                     it.isUrl && !it.content.isNullOrEmpty()

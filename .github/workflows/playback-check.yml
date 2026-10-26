@@ -1,7 +1,7 @@
 name: Playback regression
 on:
   push:
-    branches: [verification/audio-quality]
+    branches: [verification/audio-quality, verification/compilation-chapters]
   workflow_dispatch:
 permissions:
   contents: read
@@ -22,7 +22,12 @@ jobs:
           sudo udevadm trigger --name-match=kvm
       - name: Logic regression
         working-directory: android
-        run: ./gradlew --no-daemon testDebugUnitTest --tests '*MixBuilderTest' --tests '*PersistenceTest' --tests '*MusicSearchPolicyTest'
+        run: ./gradlew --no-daemon testDebugUnitTest --tests '*MixBuilderTest' --tests '*PersistenceTest' --tests '*MusicSearchPolicyTest' --tests '*SongChaptersTest' --tests '*ChapterPersistenceTest'
+      - name: Public timestamp metadata check
+        working-directory: android
+        env:
+          CHECK_PUBLIC_CHAPTERS: '1'
+        run: ./gradlew --no-daemon testDebugUnitTest --tests '*LiveChapterTest'
       - name: Android playback with generated PCM
         uses: reactivecircus/android-emulator-runner@v2
         with:

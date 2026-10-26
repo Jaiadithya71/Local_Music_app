@@ -48,6 +48,56 @@ class PlaybackSmokeTest {
         return Song(id = name, title = "Generated $name", artist = "Test oscillator", durationSec = 8,
             localFilePath = file.absolutePath, isDownloaded = true)
     }
+    @Test fun compilationAppSessionAndHeadsetNextStayInsideRecording() {
+        context.getSharedPreferences("vibestream_taste", 0).edit().putBoolean("done", true).commit()
+        val scenario = ActivityScenario.launch(MainActivity::class.java)
+        lateinit var app: MusicPlayerController
+        lateinit var remote: androidx.media3.session.MediaController
+        lateinit var future: com.google.common.util.concurrent.ListenableFuture<androidx.media3.session.MediaController>
+        val first = tone("fixture-compilation", 440.0).copy(chapters = listOf(
+            com.contentagent.vibestream.data.chapters.SongChapter("First", 0),
+            com.contentagent.vibestream.data.chapters.SongChapter("Second", 2000),
+            com.contentagent.vibestream.data.chapters.SongChapter("Third", 4000),
+            com.contentagent.vibestream.data.chapters.SongChapter("Fourth", 6000)))
+        val next = tone("fixture-after-compilation", 660.0)
+        try {
+            onMain {
+                app = MusicPlayerController(context, YouTubeExtractor())
+                future = androidx.media3.session.MediaController.Builder(context,
+                    androidx.media3.session.SessionToken(context, android.content.ComponentName(context, PlaybackService::class.java))).buildAsync()
+            }
+            remote = future.get(15, java.util.concurrent.TimeUnit.SECONDS)
+            onMain { app.playSong(first, listOf(first, next)) }
+            await("compilation starts") { app.isPlaying.value && app.currentSong.value?.id == first.id }
+            onMain { remote.pause(); remote.seekTo(0) }
+            await("prefetch exists before skip, so boundary must take precedence") {
+                var result = false; onMain { result = remote.hasNextMediaItem() }; result
+            }
+            fun assertAt(label: String, target: Long) {
+                await(label) { var ok = false; onMain {
+                    ok = remote.currentMediaItem?.mediaId == first.id && kotlin.math.abs(remote.currentPosition - target) < 300
+                }; ok }
+            }
+            onMain { app.next() }; assertAt("in-app Next uses second boundary", 2000)
+            onMain { remote.seekToNext() }; assertAt("session Next uses third boundary", 4000)
+            onMain { remote.seekToPreviousMediaItem() }; assertAt("session Previous returns second boundary", 2000)
+            // Android's media-button route, used by wired/Bluetooth Next, not a direct callback.
+            val audio = context.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
+            audio.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_MEDIA_NEXT))
+            audio.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_MEDIA_NEXT))
+            assertAt("hardware media-key Next uses third boundary", 4000)
+            onMain { remote.seekToNextMediaItem() }; assertAt("media-item Next uses fourth boundary", 6000)
+            onMain { remote.seekToNext() }
+            await("last boundary falls through to prefetched queue item") { app.currentSong.value?.id == next.id }
+            assertNull(app.errorMessage.value)
+            android.util.Log.i("PlaybackBenchmark", "Compilation: app/session/headset boundaries and queue fallback passed")
+        } finally {
+            onMain { app.release(); androidx.media3.session.MediaController.releaseFuture(future) }
+            scenario.close(); context.stopService(Intent(context, PlaybackService::class.java))
+            File(first.localFilePath!!).delete(); File(next.localFilePath!!).delete()
+        }
+    }
+
     @Test fun aacAndOpusDecodeThroughRealPlaybackService() {
         context.getSharedPreferences("vibestream_taste", 0).edit().putBoolean("done", true).commit()
         val scenario = ActivityScenario.launch(MainActivity::class.java)

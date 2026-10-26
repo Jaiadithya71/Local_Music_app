@@ -207,6 +207,9 @@ class MusicPlayerController(
     }
 
     fun next() {
+        controller?.let { c ->
+            ChapterNavigation.next(c.currentMediaItem, c.currentPosition)?.let { seekTo(it); return }
+        }
         val q = _queue.value
         if (q.isEmpty()) return
         val i = _queueIndex.value
@@ -227,6 +230,9 @@ class MusicPlayerController(
     }
 
     fun previous() {
+        controller?.let { c ->
+            ChapterNavigation.previous(c.currentMediaItem, c.currentPosition)?.let { seekTo(it); return }
+        }
         val q = _queue.value
         if (q.isEmpty()) return
         if ((controller?.currentPosition ?: 0L) > 3000L) { seekTo(0); return }
@@ -385,6 +391,7 @@ class MusicPlayerController(
             thumbnailUrl = metadata.artworkUri?.toString() ?: "",
             streamUrl = if (localPath == null) uri?.toString() else null,
             localFilePath = localPath,
+            chapters = ChapterNavigation.chapters(item).takeIf { it.isNotEmpty() },
             isDownloaded = localPath != null
         )
     }
@@ -463,7 +470,9 @@ class MusicPlayerController(
     }
 
     private fun buildItem(song: Song, uri: Uri): MediaItem {
+        extractor.cachedChapters(song.id)?.let { song.chapters = it }
         val metadata = MediaMetadata.Builder()
+            .setExtras(ChapterNavigation.extras(song.chapters.orEmpty()))
             .setTitle(song.title)
             .setArtist(song.artist)
             .setArtworkUri(if (song.thumbnailUrl.isNotEmpty()) Uri.parse(song.thumbnailUrl) else null)
@@ -536,6 +545,23 @@ class MusicPlayerController(
                 pendingResumeMs = null
                 if (resume != null && resume > 0) player.seekTo(resume)
                 player.play()
+                persistQueue()
+                // Cached/offline URLs skip stream resolution. Fetch only metadata for
+                // long YouTube recordings, without delaying playback or guessing cuts.
+                if (song.chapters == null && song.id.matches(Regex("[A-Za-z0-9_-]{11}")) &&
+                    (song.durationSec >= 600 || song.durationSec == 0L)) {
+                    playerScope.launch {
+                        val chapters = extractor.resolveChapters(song.id) ?: return@launch
+                        if (generation != playbackGeneration || player.currentMediaItem?.mediaId != song.id) return@launch
+                        song.chapters = chapters
+                        val index = player.currentMediaItemIndex
+                        val old = player.currentMediaItem ?: return@launch
+                        player.replaceMediaItem(index, old.buildUpon().setMediaMetadata(old.mediaMetadata.buildUpon()
+                            .setExtras(ChapterNavigation.extras(chapters)).build()).build())
+                        _currentSong.value = song.copy(chapters = chapters)
+                        persistQueue()
+                    }
+                }
                 scheduleNextPrefetch()
             }
         }
