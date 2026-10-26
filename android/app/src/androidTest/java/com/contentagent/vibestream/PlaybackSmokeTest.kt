@@ -84,7 +84,7 @@ class PlaybackSmokeTest {
         try {
             onMain { controller = MusicPlayerController(context, YouTubeExtractor()) }
             onMain { controller.playSong(first, listOf(first, second)) }
-            await("first fixture reaches playing") { controller.isPlaying.value && controller.currentSong.value?.id == first.id }
+            await("first fixture reaches playing; generated file ${File(first.localFilePath!!).length()} bytes") { controller.isPlaying.value && controller.currentSong.value?.id == first.id }
             await("playback clock advances") { controller.currentPosition.value > 500 }
             await("actual audio session assigned") { PlaybackService.audioSessionId > 0 }
             await("decoded PCM format reported") { PlaybackService.audioFormatSummary.contains("44100 Hz") }
