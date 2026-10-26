@@ -15,7 +15,9 @@ object MixBuilder {
     ): List<Song> {
         if (limit <= 0) return emptyList()
         val blocked = skippedArtists.map { it.trim().lowercase(Locale.ROOT) }.toSet()
-        val sources = listOf(liked, discovery, recent, playlistSongs).map { source ->
+        val recentlyPlayed = recent.map { it.id }.toSet()
+        val freshFirst = discovery.sortedBy { if (it.id in recentlyPlayed) 1 else 0 }
+        val sources = listOf(liked, freshFirst, recent, playlistSongs).map { source ->
             source.filter { it.kind == "song" }
         }
         val candidates = mutableListOf<Song>()

@@ -53,4 +53,20 @@ class MixBuilderTest {
         val mix = MixBuilder.build(emptyList(), emptyList(), emptyList(), listOf(song("seed")))
         assertEquals(listOf("seed"), mix.map { it.id })
     }
+
+    @Test fun discoveryPrefersNotRecentlyPlayed() {
+        val mix = MixBuilder.build(emptyList(), listOf(song("old")), emptyList(),
+            listOf(song("old"), song("fresh")), limit = 2)
+        assertEquals("fresh", mix.first().id)
+    }
+    @Test fun languageAndMoodQueriesStayTogether() {
+        val seeds = com.contentagent.vibestream.data.recommendation.TasteQueries.seeds(
+            listOf("Tamil"), listOf("Chill"), listOf("Artist"))
+        assertEquals(listOf("Tamil hit songs", "Tamil Chill songs", "Artist songs"), seeds)
+        assertFalse(seeds.any { it.contains("bollywood") })
+    }
+    @Test fun blankOnboardingUsesExplicitFallbackOnly() {
+        val seeds = com.contentagent.vibestream.data.recommendation.TasteQueries.seeds(listOf("  "), emptyList(), emptyList())
+        assertEquals(3, seeds.size)
+    }
 }

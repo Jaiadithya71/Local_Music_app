@@ -59,10 +59,6 @@ private fun rankForTaste(items: List<Song>, likedArtists: Set<String>, skippedAr
     }
 }
 
-private val mixSeedQueries = listOf(
-    "tamil hit songs", "bollywood hit songs", "tamil philosophical songs", "retro classic songs"
-)
-
 private fun restoreMoodMix(ctx: android.content.Context): List<Song> {
     val json = shelfPrefs(ctx).getString("mood_mix", null) ?: return emptyList()
     val type = object : com.google.gson.reflect.TypeToken<List<Song>>() {}.type
@@ -188,7 +184,9 @@ fun HomeShelves(
     likedArtistsProvider = { liked.map { it.artist }.toSet() }
     skippedArtistsProvider = { skippedArtists }
     val tasteShelves = profile.languages.take(2).map { "$it hits" to "$it hit songs" } +
-        profile.moods.take(2).map { it to "$it songs" }
+        profile.moods.take(2).map { mood ->
+            mood to "${profile.languages.firstOrNull()?.plus(" ") ?: ""}$mood songs"
+        }
     val shelfList = remember(topArtist) {
         val topQuery = when {
             topArtist != null -> "$topArtist songs"
@@ -197,9 +195,8 @@ fun HomeShelves(
         }
         listOf("Top picks for you" to topQuery) + tasteShelves.ifEmpty { shelves.drop(1) }
     }
-    // Respect selected languages/moods. Defaults are only for skipped onboarding.
-    val seedQueries = (shelfList.map { it.second } +
-        if (profile.languages.isEmpty() && profile.moods.isEmpty() && profile.artists.isEmpty()) mixSeedQueries else emptyList()).distinct()
+    val seedQueries = com.contentagent.vibestream.data.recommendation.TasteQueries.seeds(
+        profile.languages, profile.moods, profile.artists)
     val seedSongs = seedQueries.flatMap { ShelfCache.data[cacheKey(it, musicOnly)] ?: emptyList() }
     var moodMix by remember { mutableStateOf(restoreMoodMix(ctx)) }
     // Show cached shelves instantly, then refresh one at a time in the background.
@@ -252,7 +249,7 @@ fun HomeShelves(
         val mixDefs: List<Triple<String, String, String>> =
             if (profile.languages.isNotEmpty() || profile.moods.isNotEmpty()) {
                 profile.languages.take(2).map { Triple("$it mix", "Hits and fresh picks", "$it hit songs") } +
-                    profile.moods.take(2).map { Triple("$it mix", "Made for your mood", "$it songs") }
+                    profile.moods.take(2).map { Triple("$it mix", "Made for your mood", "${profile.languages.firstOrNull()?.plus(" ") ?: ""}$it songs") }
             } else {
                 listOf(
                     Triple("Tamil mix", "Hits and fresh picks", "tamil hit songs"),
