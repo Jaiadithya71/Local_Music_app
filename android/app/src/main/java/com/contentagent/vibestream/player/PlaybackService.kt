@@ -172,6 +172,7 @@ class PlaybackService : MediaSessionService() {
         // ExoPlayer seek (gapless); otherwise the app controller resolves the
         // next track on the fly.
         val player = object : androidx.media3.common.ForwardingPlayer(exo) {
+            override fun isCommandAvailable(command: Int): Boolean = getAvailableCommands().contains(command)
             override fun getAvailableCommands(): Player.Commands {
                 return super.getAvailableCommands().buildUpon()
                     .add(Player.COMMAND_SEEK_TO_NEXT)

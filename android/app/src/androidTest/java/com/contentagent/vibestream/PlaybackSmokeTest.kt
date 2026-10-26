@@ -81,6 +81,7 @@ class PlaybackSmokeTest {
             }
             onMain { app.next() }; assertAt("in-app Next uses second boundary", 2000)
             onMain { remote.seekToNext() }; assertAt("session Next uses third boundary", 4000)
+            onMain { assertTrue("Session advertises chapter Previous", remote.isCommandAvailable(androidx.media3.common.Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)) }
             onMain { remote.seekToPreviousMediaItem() }; assertAt("session Previous returns second boundary", 2000)
             // Android's media-button route, used by wired/Bluetooth Next, not a direct callback.
             val audio = context.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
