@@ -315,6 +315,7 @@ class MusicPlayerController(
                     // Keep recent played items so notification/lock-screen Previous works.
                     while (c.mediaItemCount > 1 && c.currentMediaItemIndex > 10) c.removeMediaItem(0)
                 }
+                _currentSong.value?.let { ensureChapters(it) }
                 scheduleNextPrefetch()
             }
 
@@ -458,6 +459,25 @@ class MusicPlayerController(
         }
     }
 
+    private var chapterJob: Job? = null
+    private fun ensureChapters(song: Song) {
+        chapterJob?.cancel()
+        if (song.chapters != null || !song.id.matches(Regex("[A-Za-z0-9_-]{11}")) ||
+            (song.durationSec in 1..599)) return
+        chapterJob = playerScope.launch {
+            val chapters = extractor.resolveChapters(song.id) ?: return@launch
+            val player = controller ?: return@launch
+            if (player.currentMediaItem?.mediaId != song.id) return@launch
+            song.chapters = chapters
+            val index = player.currentMediaItemIndex
+            val old = player.currentMediaItem ?: return@launch
+            player.replaceMediaItem(index, old.buildUpon().setMediaMetadata(old.mediaMetadata.buildUpon()
+                .setExtras(ChapterNavigation.extras(chapters)).build()).build())
+            _currentSong.value = song.copy(chapters = chapters)
+            persistQueue()
+        }
+    }
+
     private fun describe(e: PlaybackException): String {
         var c: Throwable? = e.cause
         val parts = mutableListOf(e.errorCodeName)
@@ -546,22 +566,7 @@ class MusicPlayerController(
                 if (resume != null && resume > 0) player.seekTo(resume)
                 player.play()
                 persistQueue()
-                // Cached/offline URLs skip stream resolution. Fetch only metadata for
-                // long YouTube recordings, without delaying playback or guessing cuts.
-                if (song.chapters == null && song.id.matches(Regex("[A-Za-z0-9_-]{11}")) &&
-                    (song.durationSec >= 600 || song.durationSec == 0L)) {
-                    playerScope.launch {
-                        val chapters = extractor.resolveChapters(song.id) ?: return@launch
-                        if (generation != playbackGeneration || player.currentMediaItem?.mediaId != song.id) return@launch
-                        song.chapters = chapters
-                        val index = player.currentMediaItemIndex
-                        val old = player.currentMediaItem ?: return@launch
-                        player.replaceMediaItem(index, old.buildUpon().setMediaMetadata(old.mediaMetadata.buildUpon()
-                            .setExtras(ChapterNavigation.extras(chapters)).build()).build())
-                        _currentSong.value = song.copy(chapters = chapters)
-                        persistQueue()
-                    }
-                }
+                ensureChapters(song)
                 scheduleNextPrefetch()
             }
         }

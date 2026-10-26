@@ -352,7 +352,8 @@ class YouTubeExtractor {
             val info = org.schabi.newpipe.extractor.stream.StreamInfo.getInfo(
                 "https://www.youtube.com/watch?v=$videoId"
             )
-            rememberChapters(videoId, info)
+            // Metadata must never prevent an otherwise playable stream.
+            try { rememberChapters(videoId, info) } catch (_: Exception) { }
             val progressive = info.audioStreams.filter {
                 it.deliveryMethod == org.schabi.newpipe.extractor.stream.DeliveryMethod.PROGRESSIVE_HTTP &&
                     it.isUrl && !it.content.isNullOrEmpty()
