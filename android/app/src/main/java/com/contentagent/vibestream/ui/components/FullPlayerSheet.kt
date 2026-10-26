@@ -140,6 +140,30 @@ fun FullPlayerSheet(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            val chapters = song.chapters.orEmpty()
+            if (chapters.size >= 2) {
+                val chapterIndex = chapters.indexOfLast { it.startMs <= currentPosition }.coerceAtLeast(0)
+                Text("Song ${chapterIndex + 1} of ${chapters.size} · ${chapters[chapterIndex].title}",
+                    color = AmberOrange, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(8.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    items(chapters.size) { i ->
+                        SuggestionChip(onClick = { onSeekTo(chapters[i].startMs) },
+                            label = { Text("${i + 1}. ${chapters[i].title}", maxLines = 1,
+                                overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 200.dp)) })
+                    }
+                }
+                Text("Next skips within this recording. Timings supplied by the publisher.",
+                    color = TextSecondary, fontSize = 12.sp, modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(12.dp))
+            } else if (song.durationSec >= 600) {
+                Text(if (song.chapters == null) "Song timings not loaded. Next skips this recording."
+                    else "No song timings found. Next skips this recording.",
+                    color = TextSecondary, fontSize = 12.sp, modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(12.dp))
+            }
+
             // Scrubber Slider
             var isUserSeeking by remember { mutableStateOf(false) }
             var seekValue by remember { mutableStateOf(0f) }

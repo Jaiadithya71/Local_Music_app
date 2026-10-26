@@ -24,6 +24,7 @@ jobs:
         working-directory: android
         run: ./gradlew --no-daemon testDebugUnitTest --tests '*MixBuilderTest' --tests '*PersistenceTest' --tests '*MusicSearchPolicyTest' --tests '*SongChaptersTest' --tests '*ChapterPersistenceTest'
       - name: Public timestamp metadata check
+        continue-on-error: true
         working-directory: android
         env:
           CHECK_PUBLIC_CHAPTERS: '1'

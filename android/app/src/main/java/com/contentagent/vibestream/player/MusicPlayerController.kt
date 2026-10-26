@@ -468,12 +468,13 @@ class MusicPlayerController(
             val chapters = extractor.resolveChapters(song.id) ?: return@launch
             val player = controller ?: return@launch
             if (player.currentMediaItem?.mediaId != song.id) return@launch
-            song.chapters = chapters
+            val enriched = song.copy(chapters = chapters)
+            _queue.value = _queue.value.map { if (it.id == song.id) enriched else it }
+            _currentSong.value = enriched
             val index = player.currentMediaItemIndex
             val old = player.currentMediaItem ?: return@launch
             player.replaceMediaItem(index, old.buildUpon().setMediaMetadata(old.mediaMetadata.buildUpon()
                 .setExtras(ChapterNavigation.extras(chapters)).build()).build())
-            _currentSong.value = song.copy(chapters = chapters)
             persistQueue()
         }
     }

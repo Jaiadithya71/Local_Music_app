@@ -1,6 +1,7 @@
 package com.contentagent.vibestream
 
 import android.content.Intent
+import androidx.activity.compose.setContent
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -87,6 +88,24 @@ class PlaybackSmokeTest {
             audio.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_MEDIA_NEXT))
             assertAt("hardware media-key Next uses third boundary", 4000)
             onMain { remote.seekToNextMediaItem() }; assertAt("media-item Next uses fourth boundary", 6000)
+            scenario.onActivity { activity ->
+                activity.setContent {
+                    com.contentagent.vibestream.ui.theme.VibeStreamTheme {
+                        com.contentagent.vibestream.ui.components.FullPlayerSheet(
+                            song = first, isPlaying = false, isBuffering = false,
+                            currentPosition = 6000, duration = 8000, isDownloaded = true,
+                            isDownloading = false, downloadProgress = 0f,
+                            onTogglePlayPause = {}, onSeekTo = {}, onSkipForward = {}, onSkipBackward = {},
+                            onDownloadClick = {}, onDismiss = {})
+                    }
+                }
+            }
+            instrumentation.waitForIdleSync()
+            Thread.sleep(1000) // Allow sheet entrance animation before visual evidence, not a readiness gate.
+            File(context.getExternalFilesDir(null), "compilation-chapters.png").outputStream().use {
+                instrumentation.uiAutomation.takeScreenshot().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+            }
+            instrumentation.uiAutomation.executeShellCommand("cp /sdcard/Android/data/com.contentagent.vibestream/files/compilation-chapters.png /data/local/tmp/compilation-chapters.png").close()
             onMain { remote.seekToNext() }
             await("last boundary falls through to prefetched queue item") { app.currentSong.value?.id == next.id }
             assertNull(app.errorMessage.value)
