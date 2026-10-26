@@ -82,7 +82,7 @@ class MusicPlayerController(
                 attachChapters(song,result.chapters)
                 _analysisStatus.value = "Automatic naming finished. Boundaries are approximate; misses stay Unknown."
             } catch (_:kotlinx.coroutines.CancellationException) { throw kotlinx.coroutines.CancellationException() }
-            catch (e:Exception) { _analysisStatus.value = "Naming unavailable: ${e.message?.take(90)}. No guessed names." }
+            catch (e:Exception) { if (!ownerJob.isActive) return@launch; _analysisStatus.value = "Naming unavailable: ${e.message?.take(90)}. No guessed names." }
         }
     }
 
@@ -339,6 +339,10 @@ class MusicPlayerController(
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                if (mediaItem?.mediaId != _currentSong.value?.id) {
+                    analysisJob?.cancel()
+                    _analysisStatus.value = ""
+                }
                 val q = _queue.value
                 val idx = q.indexOfFirst { it.id == mediaItem?.mediaId }
                 if (idx >= 0) {

@@ -22,6 +22,13 @@ class CompilationIndexerTest {
   val result=CompilationIndexer(decode={_,_,_->ShortArray(48000)},recognize={null},throttle={}).index("fixture",600000)
   assertEquals("Unknown",result.chapters.single().title)
  }
+ @Test fun cancellationDuringDecodeStopsBeforeDisclosure() {
+  var cancelled=false;var called=false
+  try {
+   CompilationIndexer(decode={_,_,_->cancelled=true;ShortArray(48000)},recognize={called=true;null},throttle={}).index("fixture",600000,cancelled={cancelled})
+   fail("Must cancel after decode")
+  } catch (_:IllegalStateException) { assertFalse(called) }
+ }
  @Test fun cancellationStopsBeforeDisclosure() {
   var called=false
   try {

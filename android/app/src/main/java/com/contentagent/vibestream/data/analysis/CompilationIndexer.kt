@@ -21,6 +21,7 @@ class CompilationIndexer(
             check(calls < 240) { "Analysis request limit reached" }
             val pcm = decode(source,start,cancelled)
             if (pcm.size < 48000) return RecognitionTimeline.Observation(start,null)
+            check(!cancelled()) { "Analysis cancelled" }
             val match = recognize(pcm)
             calls++
             val point = RecognitionTimeline.Observation(start,match?.id,match?.title,match?.artist,

@@ -93,7 +93,7 @@ class PlaybackSmokeTest {
                 activity.setContent {
                     com.contentagent.vibestream.ui.theme.VibeStreamTheme {
                         com.contentagent.vibestream.ui.components.FullPlayerSheet(
-                            song = first, isPlaying = false, isBuffering = false,
+                            song = first.copy(durationSec = 600), isPlaying = false, isBuffering = false,
                             currentPosition = 6000, duration = 8000, isDownloaded = true,
                             isDownloading = false, downloadProgress = 0f,
                             onTogglePlayPause = {}, onSeekTo = {}, onSkipForward = {}, onSkipBackward = {},
@@ -107,6 +107,31 @@ class PlaybackSmokeTest {
                 instrumentation.uiAutomation.takeScreenshot().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
             }
             instrumentation.uiAutomation.executeShellCommand("cp /sdcard/Android/data/com.contentagent.vibestream/files/compilation-chapters.png /data/local/tmp/compilation-chapters.png").close()
+            val secondChip = instrumentation.uiAutomation.rootInActiveWindow.findAccessibilityNodeInfosByText("2. Second").firstOrNull()
+            assertNotNull("Named selector is accessible", secondChip)
+            assertTrue(secondChip!!.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK))
+            assertAt("Named selector seeks second song", 2000)
+            onMain { remote.seekTo(6000) }
+            fun findSwitch(node: android.view.accessibility.AccessibilityNodeInfo?): android.view.accessibility.AccessibilityNodeInfo? {
+                if (node == null) return null
+                if (node.isCheckable) return node
+                for (i in 0 until node.childCount) findSwitch(node.getChild(i))?.let { return it }
+                return null
+            }
+            val toggle = findSwitch(instrumentation.uiAutomation.rootInActiveWindow)
+            assertNotNull("Opt-in switch is accessible", toggle)
+            assertFalse("Automatic recognition defaults off", toggle!!.isChecked)
+            assertTrue(toggle.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK))
+            await("Fingerprint disclosure dialog appears") {
+                instrumentation.uiAutomation.rootInActiveWindow.findAccessibilityNodeInfosByText("Enable automatic song naming?").isNotEmpty()
+            }
+            File(context.getExternalFilesDir(null), "recognition-consent.png").outputStream().use {
+                instrumentation.uiAutomation.takeScreenshot().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+            }
+            instrumentation.uiAutomation.executeShellCommand("cp /sdcard/Android/data/com.contentagent.vibestream/files/recognition-consent.png /data/local/tmp/recognition-consent.png").close()
+            val cancel = instrumentation.uiAutomation.rootInActiveWindow.findAccessibilityNodeInfosByText("Cancel").first()
+            assertTrue(cancel.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK))
+            assertFalse(com.contentagent.vibestream.data.analysis.CompilationCache(context).enabled)
             onMain { remote.seekToNext() }
             await("last boundary falls through to prefetched queue item") { app.currentSong.value?.id == next.id }
             assertNull(app.errorMessage.value)

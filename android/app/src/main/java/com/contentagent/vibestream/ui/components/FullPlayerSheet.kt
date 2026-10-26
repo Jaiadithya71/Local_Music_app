@@ -173,7 +173,7 @@ fun FullPlayerSheet(
                                 overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 200.dp)) })
                     }
                 }
-                Text("Next skips within this recording. Timings supplied by the publisher.",
+                Text("Next skips within this recording. Automatically named song starts are approximate.",
                     color = TextSecondary, fontSize = 12.sp, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(12.dp))
             } else if (song.durationSec >= 600) {
