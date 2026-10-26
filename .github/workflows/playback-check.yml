@@ -23,7 +23,14 @@ jobs:
       - name: Logic regression
         working-directory: android
         run: ./gradlew --no-daemon testDebugUnitTest --tests '*MixBuilderTest' --tests '*PersistenceTest' --tests '*MusicSearchPolicyTest' --tests '*SongChaptersTest' --tests '*ChapterPersistenceTest' --tests '*RecognitionTimelineTest'
+      - name: Preserve logic evidence
+        working-directory: android
+        run: |
+          mkdir -p ../playback-evidence/unit
+          cp -r app/build/test-results/testDebugUnitTest/. ../playback-evidence/unit/
+      # Live anonymous metadata probe hit a confirmed bot wall. Do not retry on push.
       - name: Public timestamp metadata check
+        if: ${{ false }}
         continue-on-error: true
         working-directory: android
         env:

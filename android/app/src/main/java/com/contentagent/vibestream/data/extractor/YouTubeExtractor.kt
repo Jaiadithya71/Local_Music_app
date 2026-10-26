@@ -49,29 +49,7 @@ class YouTubeExtractor {
             chapterCache[videoId]
         } catch (e: Exception) {
             lastChapterError = "${e.javaClass.simpleName}: ${e.message}".take(180)
-            // Public metadata fallback uses the same watch page as existing search.
-            // No stream download, login, API key, or per-recording hand annotation.
-            try {
-                val request = Request.Builder().url("https://www.youtube.com/watch?v=$videoId")
-                    .header("User-Agent", "Mozilla/5.0").build()
-                client.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) return@withContext null
-                    val html = response.body?.string().orEmpty()
-                    val key = "ytInitialPlayerResponse = "
-                    val start = html.indexOf(key).takeIf { it >= 0 }?.plus(key.length)
-                        ?: return@withContext null.also { lastChapterError = "$lastChapterError; no public player metadata" }
-                    val details = JsonParser.parseReader(com.google.gson.stream.JsonReader(java.io.StringReader(html.substring(start))).apply { isLenient = true })
-                        .asJsonObject.getAsJsonObject("videoDetails") ?: return@withContext null
-                    val text = details.get("shortDescription")?.asString.orEmpty()
-                    val duration = details.get("lengthSeconds")?.asLong ?: 0L
-                    val points = com.contentagent.vibestream.data.chapters.SongChapters.fromDescription(text, duration * 1000)
-                    chapterCache[videoId] = points
-                    points
-                }
-            } catch (fallback: Exception) {
-                lastChapterError = "$lastChapterError; fallback ${fallback.javaClass.simpleName}: ${fallback.message}".take(300)
-                null
-            }
+            null
         }
     }
     @Volatile var lastChapterError: String? = null

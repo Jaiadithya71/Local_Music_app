@@ -36,3 +36,8 @@ Public timestamp cross-check fixture: Bhoomi official jukebox, video ges_8ILnAo4
 https://www.studioflicks.com/video/bhoomi-songs-jukebox/
 
 Version/build/test results belong in release evidence, not assumptions here.
+
+Live metadata probe status: anonymous watch access on CI was blocked by YouTube
+with LOGIN_REQUIRED / confirm-not-bot. Repeated push-time probes are disabled.
+This is a verification blocker, not evidence of working publisher extraction on
+that environment. The user's phone/source route has not been tested here.
