@@ -51,16 +51,25 @@ manual annotation. Publisher metadata is one input, not a universal solution.
   tagging via SongRec. GPLv3 references are not copied into this MIT project.
 - ShazamIO https://github.com/shazamio/ShazamIO is an unofficial endpoint client.
   shazamio-core https://github.com/shazamio/shazamio-core declares MIT but also
-  references SongRec algorithm work. Its code has not been imported here.
-- No network recognition operation has been run as part of this design.
+  references SongRec algorithm work. The Kotlin implementation was adapted with provenance retained;
+  the relationship to referenced GPL work still needs licence review.
+- Bounded public-domain/generated provider probes were run after explicit test
+  permission. See recognition-probe-results.md. No user audio was sent.
 
 Android decoder references:
 https://developer.android.com/reference/android/media/MediaExtractor
 https://developer.android.com/reference/android/media/MediaCodec
 
 ## Prototype state
-AudioWindowDecoder is only an unconnected decoding feasibility probe. Its current
-nearest-neighbor rate conversion is NOT approved as fingerprint-quality
-resampling; anti-alias filtering and an independent golden-signature comparison
-are still required. RecognitionTimeline uses fixture observations, not a catalog.
-No endpoint client or signature generator has been imported or wired up.
+The bounded decoder uses windowed-sinc anti-alias resampling. Independent NumPy
+FFT peak agreement and Android generated AAC/Opus/PCM decoding gates passed.
+The unofficial endpoint client and on-device signature generator are wired to a
+default-off automatic processor with an explicit recurring-fingerprint disclosure.
+Local labels feed named selectable chips and media-session navigation. No audio
+or fingerprints are stored in the cue cache. These are prototype gates, not
+release clearance or broad real-compilation accuracy evidence.
+
+Remaining release gates: multi-song real-audio benchmark across catalog styles,
+short songs/fades/medleys, device CPU/data/battery measurement, content-versioned
+cache invalidation, physical earphones and upstream licence provenance review.
+Stable main remains unchanged. No production automatic disclosure is enabled.
