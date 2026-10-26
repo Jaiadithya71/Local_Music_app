@@ -22,13 +22,16 @@ jobs:
           sudo udevadm trigger --name-match=kvm
       - name: Logic regression
         working-directory: android
-        run: ./gradlew --no-daemon testDebugUnitTest --tests '*MixBuilderTest' --tests '*PersistenceTest' --tests '*MusicSearchPolicyTest' --tests '*SongChaptersTest' --tests '*ChapterPersistenceTest'
+        run: ./gradlew --no-daemon testDebugUnitTest --tests '*MixBuilderTest' --tests '*PersistenceTest' --tests '*MusicSearchPolicyTest' --tests '*SongChaptersTest' --tests '*ChapterPersistenceTest' --tests '*RecognitionTimelineTest'
       - name: Public timestamp metadata check
         continue-on-error: true
         working-directory: android
         env:
           CHECK_PUBLIC_CHAPTERS: '1'
-        run: ./gradlew --no-daemon testDebugUnitTest --tests '*LiveChapterTest'
+        run: |
+          mkdir -p ../playback-evidence/unit
+          cp -r app/build/test-results/testDebugUnitTest/. ../playback-evidence/unit/
+          ./gradlew --no-daemon testDebugUnitTest --tests '*LiveChapterTest'
       - name: Android playback with generated PCM
         uses: reactivecircus/android-emulator-runner@v2
         with:
