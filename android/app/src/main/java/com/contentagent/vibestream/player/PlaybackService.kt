@@ -42,7 +42,10 @@ class PlaybackService : MediaSessionService() {
         var refreshButtons: (() -> Unit)? = null
 
         // ExoPlayer's audio session, used by EqualizerManager for the system EQ.
-        var audioSessionId: Int = 0
+        @Volatile var audioSessionId: Int = 0
+        // Ephemeral local-only diagnostics; no URLs, account identifiers or history.
+        @Volatile var audioFormatSummary: String = "Not playing"
+        @Volatile var audioUnderruns: Int = 0
 
         private const val CMD_LIKE = "com.contentagent.vibestream.LIKE"
         private const val CMD_SHUFFLE = "com.contentagent.vibestream.SHUFFLE"
@@ -137,6 +140,24 @@ class PlaybackService : MediaSessionService() {
             .setAudioAttributes(audioAttrs, /* handleAudioFocus= */ true)
             .setHandleAudioBecomingNoisy(true)
             .build()
+        exo.addAnalyticsListener(object : androidx.media3.exoplayer.analytics.AnalyticsListener {
+            override fun onAudioInputFormatChanged(
+                eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+                format: androidx.media3.common.Format,
+                decoderReuseEvaluation: androidx.media3.exoplayer.DecoderReuseEvaluation?
+            ) {
+                val rate = if (format.sampleRate > 0) "${format.sampleRate} Hz" else "rate unknown"
+                val channels = if (format.channelCount > 0) "${format.channelCount} channels" else "channels unknown"
+                val bitrate = if (format.averageBitrate > 0) "${format.averageBitrate / 1000} kbps" else "bitrate unknown"
+                audioFormatSummary = "${format.sampleMimeType ?: "codec unknown"} · $rate · $channels · $bitrate"
+            }
+            override fun onAudioUnderrun(
+                eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+                bufferSize: Int, bufferSizeMs: Long, elapsedSinceLastFeedMs: Long
+            ) {
+                audioUnderruns++
+            }
+        })
         audioSessionId = exo.audioSessionId
         exo.addListener(object : Player.Listener {
             override fun onAudioSessionIdChanged(audioSessionId: Int) {
@@ -189,6 +210,8 @@ class PlaybackService : MediaSessionService() {
         }
         refreshButtons = null
         audioSessionId = 0
+        audioFormatSummary = "Not playing"
+        audioUnderruns = 0
         super.onDestroy()
     }
 }

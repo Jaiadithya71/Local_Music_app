@@ -47,6 +47,33 @@ class PlaybackSmokeTest {
         return Song(id = name, title = "Generated $name", artist = "Test oscillator", durationSec = 8,
             localFilePath = file.absolutePath, isDownloaded = true)
     }
+    @Test fun aacAndOpusDecodeThroughRealPlaybackService() {
+        context.getSharedPreferences("vibestream_taste", 0).edit().putBoolean("done", true).commit()
+        val scenario = ActivityScenario.launch(MainActivity::class.java)
+        lateinit var controller: MusicPlayerController
+        try {
+            onMain { controller = MusicPlayerController(context, YouTubeExtractor()) }
+            for ((filename, mime, rate) in listOf(
+                Triple("generated-aac.m4a", "audio/mp4a-latm", "44100 Hz"),
+                Triple("generated-opus.webm", "audio/opus", "48000 Hz")
+            )) {
+                val file = File(context.filesDir, filename)
+                instrumentation.context.assets.open(filename).use { input -> file.outputStream().use { input.copyTo(it) } }
+                val song = Song(id = filename, title = "Generated codec fixture", artist = "Test oscillator",
+                    localFilePath = file.absolutePath, isDownloaded = true)
+                onMain { controller.playSong(song) }
+                await("$filename reaches actual playback") { controller.isPlaying.value && controller.currentSong.value?.id == filename }
+                await("$filename decoded format reported") { PlaybackService.audioFormatSummary.contains(mime) && PlaybackService.audioFormatSummary.contains(rate) }
+                await("$filename clock advances") { controller.currentPosition.value >= 500 }
+                assertNull(controller.errorMessage.value)
+                android.util.Log.i("PlaybackBenchmark", "$filename decoded: ${PlaybackService.audioFormatSummary}")
+            }
+        } finally {
+            onMain { controller.release() }
+            scenario.close()
+            context.stopService(Intent(context, PlaybackService::class.java))
+        }
+    }
     @Test fun localPcmPlaybackPauseSeekNextAndTimer() {
         // Foreground activity permits starting the actual media playback service.
         context.getSharedPreferences("vibestream_taste", 0).edit().putBoolean("done", true).commit()
@@ -60,6 +87,9 @@ class PlaybackSmokeTest {
             await("first fixture reaches playing") { controller.isPlaying.value && controller.currentSong.value?.id == first.id }
             await("playback clock advances") { controller.currentPosition.value > 500 }
             await("actual audio session assigned") { PlaybackService.audioSessionId > 0 }
+            await("decoded PCM format reported") { PlaybackService.audioFormatSummary.contains("44100 Hz") }
+            assertTrue(PlaybackService.audioFormatSummary.contains("2 channels"))
+            android.util.Log.i("PlaybackBenchmark", "Decoded fixture: ${PlaybackService.audioFormatSummary}")
             val screenshot = instrumentation.uiAutomation.takeScreenshot()
             File(context.getExternalFilesDir(null), "playback-smoke.png").outputStream().use {
                 screenshot.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)

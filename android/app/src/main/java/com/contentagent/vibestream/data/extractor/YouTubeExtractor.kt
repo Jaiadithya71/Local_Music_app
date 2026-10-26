@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit
 /**
  * Autonomous On-Device YouTube Extractor.
  * Runs on the Android phone using public upstream services.
- * Searches tracks and resolves direct high-fidelity audio streams with public-mirror fallback.
+ * Searches tracks and resolves available audio streams. Source quality is not guaranteed.
  */
 class YouTubeExtractor {
 
@@ -311,7 +311,7 @@ class YouTubeExtractor {
 
     /**
      * Resolves the direct audio stream URL on-device for streaming or downloading.
-     * Selects the highest quality M4A or Opus audio stream.
+     * Returns available M4A/Opus candidates. Container preference is compatibility policy, not a fidelity guarantee.
      */
     suspend fun resolveAudioStream(videoId: String): String? =
         resolveAudioCandidates(videoId).firstOrNull()

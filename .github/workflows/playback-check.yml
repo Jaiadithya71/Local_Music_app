@@ -39,11 +39,12 @@ jobs:
         run: |
           mkdir -p playback-evidence
           adb pull /sdcard/Android/data/com.contentagent.vibestream/files/playback-smoke.png playback-evidence/ || true
-          adb logcat -d -s TestRunner AndroidRuntime ExoPlayerImpl > playback-evidence/player-log.txt || true
+          adb logcat -d -s TestRunner AndroidRuntime ExoPlayerImpl PlaybackBenchmark > playback-evidence/player-log.txt || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: playback-regression-evidence
+          retention-days: 1
           path: |
             playback-evidence/
             android/app/build/reports/androidTests/
