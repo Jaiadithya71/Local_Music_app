@@ -96,7 +96,7 @@ class PlaybackSmokeTest {
                             song = first.copy(durationSec = 600), isPlaying = false, isBuffering = false,
                             currentPosition = 6000, duration = 8000, isDownloaded = true,
                             isDownloading = false, downloadProgress = 0f,
-                            onTogglePlayPause = {}, onSeekTo = {}, onSkipForward = {}, onSkipBackward = {},
+                            onTogglePlayPause = {}, onSeekTo = { app.seekTo(it) }, onSkipForward = {}, onSkipBackward = {},
                             onDownloadClick = {}, onDismiss = {})
                     }
                 }
