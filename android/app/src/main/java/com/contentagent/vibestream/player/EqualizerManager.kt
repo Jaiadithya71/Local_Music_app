@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.asStateFlow
 class EqualizerManager(context: Context) {
     private val prefs = context.getSharedPreferences("vibestream_eq", Context.MODE_PRIVATE)
     private var eq: Equalizer? = null
+    private var attachedSessionId = 0
 
     private val _available = MutableStateFlow(true)
     val available: StateFlow<Boolean> = _available.asStateFlow()
@@ -58,12 +59,16 @@ class EqualizerManager(context: Context) {
     /** Attach to the player audio session when it exists. True when ready. */
     @Synchronized
     fun ensure(): Boolean {
-        if (eq != null) return true
         val sid = PlaybackService.audioSessionId
+        if (sid > 0 && sid == attachedSessionId && eq != null) return true
+        try { eq?.release() } catch (_: Exception) {}
+        eq = null
+        attachedSessionId = 0
         if (sid <= 0) return false
         return try {
             val e = Equalizer(0, sid)
             eq = e
+            attachedSessionId = sid
             val n = e.numberOfBands.toInt()
             val saved = prefs.getString("levels", null)
                 ?.split(",")?.mapNotNull { it.toShortOrNull() }

@@ -1,0 +1,52 @@
+name: Playback regression
+on:
+  push:
+    branches: [verification/audio-quality]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  playback:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Logic regression
+        working-directory: android
+        run: ./gradlew --no-daemon testDebugUnitTest --tests '*MixBuilderTest' --tests '*PersistenceTest'
+      - name: Android playback with generated PCM
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 29
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          script: |
+            adb shell svc wifi disable
+            adb shell svc data disable
+            cd android && ./gradlew --no-daemon connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.contentagent.vibestream.PlaybackSmokeTest
+      - name: Capture evidence
+        if: always()
+        run: |
+          mkdir -p playback-evidence
+          adb pull /sdcard/Android/data/com.contentagent.vibestream/files/playback-smoke.png playback-evidence/ || true
+          adb logcat -d -s TestRunner AndroidRuntime ExoPlayerImpl > playback-evidence/player-log.txt || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playback-regression-evidence
+          path: |
+            playback-evidence/
+            android/app/build/reports/androidTests/
+            android/app/build/outputs/androidTest-results/
+            android/app/build/test-results/testDebugUnitTest/

@@ -73,18 +73,6 @@ private fun saveMoodMix(ctx: android.content.Context, songs: List<Song>) {
     shelfPrefs(ctx).edit().putString("mood_mix", com.google.gson.Gson().toJson(songs)).apply()
 }
 
-/** Liked + recent + his playlists + cached taste-genre songs, deduped. No network. */
-private fun buildMoodMix(
-    liked: List<Song>,
-    recent: List<Song>,
-    playlists: List<com.contentagent.vibestream.data.local.Playlist>,
-    genreSongs: List<Song>
-): List<Song> {
-    return (liked + recent + playlists.flatMap { it.songs } + genreSongs)
-        .distinctBy { it.id }
-        .take(50)
-}
-
 private fun shelfPrefs(ctx: android.content.Context) =
     ctx.getSharedPreferences("vibestream_shelves", android.content.Context.MODE_PRIVATE)
 
@@ -209,7 +197,9 @@ fun HomeShelves(
         }
         listOf("Top picks for you" to topQuery) + tasteShelves.ifEmpty { shelves.drop(1) }
     }
-    val seedQueries = (shelfList.map { it.second } + mixSeedQueries).distinct()
+    // Respect selected languages/moods. Defaults are only for skipped onboarding.
+    val seedQueries = (shelfList.map { it.second } +
+        if (profile.languages.isEmpty() && profile.moods.isEmpty() && profile.artists.isEmpty()) mixSeedQueries else emptyList()).distinct()
     val seedSongs = seedQueries.flatMap { ShelfCache.data[cacheKey(it, musicOnly)] ?: emptyList() }
     var moodMix by remember { mutableStateOf(restoreMoodMix(ctx)) }
     // Show cached shelves instantly, then refresh one at a time in the background.
@@ -217,16 +207,17 @@ fun HomeShelves(
         restoreShelves(ctx, shelfList.map { it.second }, musicOnly)
         for ((_, q) in shelfList) loadShelf(ctx, extractor, q, musicOnly)
         for (q in seedQueries) if (ShelfCache.data[cacheKey(q, musicOnly)] == null) loadShelf(ctx, extractor, q, musicOnly)
-        moodMix = buildMoodMix(liked, recent, playlists, seedSongs)
+        val freshSeeds = seedQueries.flatMap { ShelfCache.data[cacheKey(it, musicOnly)] ?: emptyList() }
+        moodMix = com.contentagent.vibestream.data.recommendation.MixBuilder.build(
+            liked, recent, playlists.flatMap { it.songs }, freshSeeds, skippedArtists)
         if (moodMix.isNotEmpty()) saveMoodMix(ctx, moodMix)
     }
     // Keep the mix in step with his library without hitting the network.
-    LaunchedEffect(liked.size, recent.size, playlists.size) {
-        val rebuilt = buildMoodMix(liked, recent, playlists, seedSongs)
-        if (rebuilt.isNotEmpty()) {
-            moodMix = rebuilt
-            saveMoodMix(ctx, rebuilt)
-        }
+    LaunchedEffect(liked, recent, playlists, seedSongs, skippedArtists, musicOnly) {
+        val rebuilt = com.contentagent.vibestream.data.recommendation.MixBuilder.build(
+            liked, recent, playlists.flatMap { it.songs }, seedSongs, skippedArtists)
+        moodMix = rebuilt
+        saveMoodMix(ctx, rebuilt)
     }
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
         item {
@@ -275,11 +266,12 @@ fun HomeShelves(
         val namedMixes: List<Triple<String, String, List<Song>>> = run {
             val out = mutableListOf<Triple<String, String, List<Song>>>()
             if (moodMix.isNotEmpty()) {
-                out.add(Triple("Your mood", "Your Tamil, Hindi, philosophical and retro mix", moodMix))
+                out.add(Triple("Your mood", "Favourites and fresh picks from your taste", moodMix))
             }
             for ((name, sub, q) in mixDefs) {
                 val base = ShelfCache.data[cacheKey(q, musicOnly)] ?: continue
-                val songs = (base + liked + recent).distinctBy { it.id }.take(50)
+                val songs = com.contentagent.vibestream.data.recommendation.MixBuilder.build(
+                    emptyList(), emptyList(), emptyList(), base, skippedArtists)
                 if (songs.size >= 5) out.add(Triple(name, sub, songs))
             }
             out
@@ -325,7 +317,7 @@ fun HomeShelves(
                                     .width(150.dp)
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(palette[i % palette.size].copy(alpha = 0.85f))
-                                    .clickable { onPlayMood(songs.shuffled()) }
+                                    .clickable { onPlayMood(songs) }
                                     .padding(14.dp)
                             ) {
                                 Text(name, color = androidx.compose.ui.graphics.Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)

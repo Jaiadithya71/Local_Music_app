@@ -138,10 +138,30 @@ class MusicPlayerController(
     fun toggleShuffle() {
         _shuffle.value = !_shuffle.value
         shufflePlayed.clear()
+        refreshUpcomingTrack()
         persistQueue()
     }
-    fun setShuffle(on: Boolean) { _shuffle.value = on; persistQueue() }
-    fun cycleRepeat() { _repeat.value = (_repeat.value + 1) % 3; persistQueue() }
+    fun setShuffle(on: Boolean) {
+        _shuffle.value = on
+        shufflePlayed.clear()
+        refreshUpcomingTrack()
+        persistQueue()
+    }
+    fun cycleRepeat() {
+        _repeat.value = (_repeat.value + 1) % 3
+        refreshUpcomingTrack()
+        persistQueue()
+    }
+
+    private fun refreshUpcomingTrack() {
+        prefetchJob?.cancel()
+        plannedShuffleNext = -1
+        controller?.let { c ->
+            val first = c.currentMediaItemIndex + 1
+            if (first >= 0 && first < c.mediaItemCount) c.removeMediaItems(first, c.mediaItemCount)
+        }
+        scheduleNextPrefetch()
+    }
 
     fun playAt(index: Int) {
         val q = _queue.value
@@ -271,6 +291,10 @@ class MusicPlayerController(
                     }
                     _queueIndex.value = idx
                     _currentSong.value = q[idx]
+                    if (old != idx) {
+                        pendingCandidates.clear()
+                        prefetchAlts.remove(q[idx].id)?.let { pendingCandidates.addAll(it) }
+                    }
                 } else {
                     restoreCurrentSong()
                 }
@@ -462,7 +486,10 @@ class MusicPlayerController(
 
     private fun startPlayback(song: Song) {
         playbackGeneration++
+        val generation = playbackGeneration
         prefetchJob?.cancel()
+        // Alternatives belong to this track, never to a previous selection.
+        pendingCandidates.clear()
         playerScope.launch {
             _errorMessage.value = null
             _isBuffering.value = true
@@ -479,6 +506,7 @@ class MusicPlayerController(
                 // Resolve stream on-the-fly from YouTube
                 else -> {
                     val all = extractor.resolveAudioCandidates(song.id)
+                    if (generation != playbackGeneration) return@launch
                     pendingCandidates.clear()
                     if (all.isNotEmpty()) {
                         pendingCandidates.addAll(all.drop(1).take(4))
@@ -491,12 +519,14 @@ class MusicPlayerController(
                 }
             }
 
+            if (generation != playbackGeneration) return@launch
             if (playableUri != null) {
                 val player = try { awaitController() } catch (e: Exception) {
                     _isBuffering.value = false
                     _errorMessage.value = "Playback service unavailable: ${e.localizedMessage}"
                     return@launch
                 }
+                if (generation != playbackGeneration) return@launch
                 val mediaItem = buildItem(song, playableUri)
 
                 _currentSong.value = song

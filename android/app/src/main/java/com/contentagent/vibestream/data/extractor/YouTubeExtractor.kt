@@ -41,7 +41,7 @@ class YouTubeExtractor {
             // Music mode: songs only, no podcasts, compilations or long videos.
             val songs = searchYouTubeMusic(query)
             if (songs.isNotEmpty()) return@withContext songs
-            return@withContext searchViaMirrors(query)
+            return@withContext searchViaMirrors(query, musicOnly)
         }
         // Podcasts & more: same results as the YouTube app first (compilations,
         // long mixes, channels), then YouTube Music songs not already listed.
@@ -49,7 +49,7 @@ class YouTubeExtractor {
         val songs = searchYouTubeMusic(query)
         val merged = (web + songs).distinctBy { it.id }
         if (merged.isNotEmpty()) return@withContext merged
-        searchViaMirrors(query)
+        searchViaMirrors(query, musicOnly)
     }
 
     /**
@@ -189,7 +189,7 @@ class YouTubeExtractor {
         )
     }
 
-    private suspend fun searchViaMirrors(query: String): List<Song> = withContext(Dispatchers.IO) {
+    private suspend fun searchViaMirrors(query: String, musicOnly: Boolean): List<Song> = withContext(Dispatchers.IO) {
         val encodedQuery = java.net.URLEncoder.encode(query, "UTF-8")
         val results = mutableListOf<Song>()
 
@@ -252,7 +252,8 @@ class YouTubeExtractor {
         }
 
         // If music filter produced nothing, try general video search as fallback
-        if (results.isEmpty()) {
+        // Do not silently turn Music mode into video search when a provider fails.
+        if (results.isEmpty() && !musicOnly) {
             return@withContext searchGeneralVideos(query)
         }
 
@@ -290,6 +291,7 @@ class YouTubeExtractor {
                         results.add(
                             Song(
                                 id = videoId,
+                                kind = "video",
                                 title = obj.get("title")?.asString ?: "Unknown Title",
                                 artist = obj.get("uploaderName")?.asString ?: "Unknown Artist",
                                 durationSec = obj.get("duration")?.asLong ?: 0L,

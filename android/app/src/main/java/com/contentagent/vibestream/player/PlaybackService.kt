@@ -138,6 +138,11 @@ class PlaybackService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true)
             .build()
         audioSessionId = exo.audioSessionId
+        exo.addListener(object : Player.Listener {
+            override fun onAudioSessionIdChanged(audioSessionId: Int) {
+                PlaybackService.audioSessionId = audioSessionId
+            }
+        })
         // Always advertise prev/next so the lock-screen and notification controls
         // show skip buttons. When the playlist has the adjacent item we let
         // ExoPlayer seek (gapless); otherwise the app controller resolves the
@@ -183,6 +188,7 @@ class PlaybackService : MediaSessionService() {
             mediaSession = null
         }
         refreshButtons = null
+        audioSessionId = 0
         super.onDestroy()
     }
 }
