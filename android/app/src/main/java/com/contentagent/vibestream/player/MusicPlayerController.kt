@@ -579,6 +579,7 @@ class MusicPlayerController(
     }
 
     private fun startPlayback(requested: Song) {
+        attemptedAnalysis.remove(requested.id)
         val song = if (requested.automaticChapters) requested.copy(chapters = null, automaticChapters = false) else requested
         _queue.value = _queue.value.map { if(it.id == song.id) song else it }
         analysisJob?.cancel()

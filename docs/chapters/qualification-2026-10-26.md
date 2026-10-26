@@ -13,8 +13,8 @@ No second-song, transition, miss-rate or crossfade accuracy claim follows.
 No user audio was sent. Across both phases:11 requests total,10 responses and
 one429. The earlier synthetic false positive was rejected; silence unmatched.
 
-The60second discovery grid plus12second confirmation makes about22 initial
-requests for10min, about122 for1hour, before transition refinement. A3hour file
+The60second discovery grid plus12second confirmation makes about21 initial
+requests for10min, about121 for1hour, before transition refinement. A3hour file
 would exceed the240-call cap even before all initial confirmations. The cap
 bounds service load but does not establish scan completeness. The measured429
 means1.2seconds is not a qualified durable cadence. No slower cadence has been
