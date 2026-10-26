@@ -26,8 +26,7 @@ object AudioFingerprint {
             System.arraycopy(pcm, chunk * 128, ring, sampleIndex, 128)
             sampleIndex = (sampleIndex + 128) and 2047
             val real = DoubleArray(2048) { i ->
-                ring[(i + sampleIndex) and 2047].toDouble() *
-                    (0.5 - 0.5 * cos(2.0 * PI * (i + 1) / 2049))
+                (ring[(i + sampleIndex) and 2047].toFloat() * fingerprintWindow[i]).toDouble()
             }
             val imaginary = DoubleArray(2048)
             fft(real, imaginary)

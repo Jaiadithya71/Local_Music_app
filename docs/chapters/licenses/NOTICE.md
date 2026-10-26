@@ -15,3 +15,12 @@ independent generated-audio signature comparison and recognition gates.
 Test probe is self-generated, mono16kHz PCM chirp/tones,8seconds. Golden signature
 produced separately using installed shazamio-core from the same public project.
 No commercial audio is included.
+
+Golden correction: the Python package wrapper resamples even16k PCM. Golden now
+uses a separate NumPy direct-PCM reference implementation, preserved in
+scripts/quality/reference-fingerprint.py, matching the input bytes. Different FFT
+precision can add/remove a threshold peak; test requires98% identical frame/band
+and magnitude/frequency within2 quantization units, total count within2. First
+local comparison:118of119 matching peaks, one threshold difference, all matched
+peaks byte-identical. Kotlin-generated fingerprint recognized the public-domain
+excerpt correctly, separate from the Python package positive probes.
