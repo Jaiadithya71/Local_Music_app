@@ -39,9 +39,9 @@ class YouTubeExtractor {
     suspend fun searchSongs(query: String, musicOnly: Boolean = true): List<Song> = withContext(Dispatchers.IO) {
         if (musicOnly) {
             // Music mode: songs only, no podcasts, compilations or long videos.
-            val songs = searchYouTubeMusic(query)
+            val songs = com.contentagent.vibestream.data.recommendation.MusicSearchPolicy.songsOnly(searchYouTubeMusic(query))
             if (songs.isNotEmpty()) return@withContext songs
-            return@withContext searchViaMirrors(query, musicOnly)
+            return@withContext com.contentagent.vibestream.data.recommendation.MusicSearchPolicy.songsOnly(searchViaMirrors(query, musicOnly))
         }
         // Podcasts & more: same results as the YouTube app first (compilations,
         // long mixes, channels), then YouTube Music songs not already listed.
