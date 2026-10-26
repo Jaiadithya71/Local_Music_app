@@ -172,6 +172,26 @@ class PlaybackService : MediaSessionService() {
         // ExoPlayer seek (gapless); otherwise the app controller resolves the
         // next track on the fly.
         val player = object : androidx.media3.common.ForwardingPlayer(exo) {
+            private val chapterListeners = mutableMapOf<Player.Listener, Player.Listener>()
+            override fun addListener(listener: Player.Listener) {
+                // ForwardingPlayer otherwise forwards the raw delegate command event,
+                // undoing our augmented commands after every timeline update.
+                val proxy = java.lang.reflect.Proxy.newProxyInstance(Player.Listener::class.java.classLoader,
+                    arrayOf(Player.Listener::class.java)) { _, method, args ->
+                    when (method.name) {
+                        "onAvailableCommandsChanged" -> { listener.onAvailableCommandsChanged(availableCommands); null }
+                        "equals" -> args?.getOrNull(0) === listener
+                        "hashCode" -> System.identityHashCode(listener)
+                        "toString" -> "ChapterPlayerListener"
+                        else -> method.invoke(listener, *(args ?: emptyArray()))
+                    }
+                } as Player.Listener
+                chapterListeners[listener] = proxy
+                super.addListener(proxy)
+            }
+            override fun removeListener(listener: Player.Listener) {
+                super.removeListener(chapterListeners.remove(listener) ?: listener)
+            }
             override fun isCommandAvailable(command: Int): Boolean = getAvailableCommands().contains(command)
             override fun getAvailableCommands(): Player.Commands {
                 return super.getAvailableCommands().buildUpon()
