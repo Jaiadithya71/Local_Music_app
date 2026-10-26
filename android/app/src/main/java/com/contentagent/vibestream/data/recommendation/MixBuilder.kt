@@ -16,7 +16,7 @@ object MixBuilder {
         if (limit <= 0) return emptyList()
         val blocked = skippedArtists.map { it.trim().lowercase(Locale.ROOT) }.toSet()
         val sources = listOf(liked, discovery, recent, playlistSongs).map { source ->
-            source.filter { it.kind == "song" && artist(it) !in blocked }
+            source.filter { it.kind == "song" }
         }
         val candidates = mutableListOf<Song>()
         val ids = mutableSetOf<String>()
@@ -31,11 +31,19 @@ object MixBuilder {
                 }
             }
         }
+        // Early skips are weak signals, not a permanent artist ban. Explicit likes win.
+        val likedArtists = liked.map(::artist).toSet()
+        val ordered = candidates.sortedBy { if (artist(it) in blocked && artist(it) !in likedArtists) 1 else 0 }
+        candidates.clear()
+        candidates.addAll(ordered)
         // Spread adjacent artists without pretending uploader metadata is perfect.
         val result = mutableListOf<Song>()
         while (candidates.isNotEmpty() && result.size < limit) {
             val last = result.lastOrNull()?.let(::artist)
-            val next = candidates.indexOfFirst { artist(it) != last }.takeIf { it >= 0 } ?: 0
+            fun preferred(s: Song) = artist(s) !in blocked || artist(s) in likedArtists
+            val next = candidates.indexOfFirst { preferred(it) && artist(it) != last }.takeIf { it >= 0 }
+                ?: candidates.indexOfFirst { preferred(it) }.takeIf { it >= 0 }
+                ?: candidates.indexOfFirst { artist(it) != last }.takeIf { it >= 0 } ?: 0
             result.add(candidates.removeAt(next))
         }
         return result

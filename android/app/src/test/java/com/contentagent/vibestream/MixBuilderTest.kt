@@ -25,10 +25,15 @@ class MixBuilderTest {
             emptyList(), emptyList(), emptyList())
         assertEquals(listOf("A", "B", "A"), mix.map { it.artist })
     }
-    @Test fun skippedArtistsFilteredCaseInsensitively() {
-        val mix = MixBuilder.build(listOf(song("a", "Artist")), emptyList(), emptyList(),
+    @Test fun skippedArtistsDeprioritizedNotPermanentlyBanned() {
+        val mix = MixBuilder.build(emptyList(), listOf(song("a", "Artist")), emptyList(),
             listOf(song("b", "Other")), setOf(" artist "))
-        assertEquals(listOf("b"), mix.map { it.id })
+        assertEquals(listOf("b", "a"), mix.map { it.id })
+    }
+    @Test fun explicitLikesOutrankOldEarlySkips() {
+        val mix = MixBuilder.build(listOf(song("a", "Artist")), emptyList(), emptyList(),
+            listOf(song("b", "Other")), setOf("Artist"))
+        assertEquals("a", mix.first().id)
     }
     @Test fun videoResultsNeverEnterMusicMix() {
         val mix = MixBuilder.build(emptyList(), emptyList(), emptyList(),
