@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.contentagent.vibestream.MixBuilderTest" tests="14" skipped="0" failures="0" errors="0" timestamp="2026-10-26T14:02:14" hostname="runnervmtai0g" time="0.013">
+  <properties/>
+  <testcase name="coldStartIsNotFalselyLabeledPersonalized" classname="com.contentagent.vibestream.MixBuilderTest" time="0.001"/>
+  <testcase name="consecutiveArtistsSpreadWhenPossible" classname="com.contentagent.vibestream.MixBuilderTest" time="0.004"/>
+  <testcase name="duplicateRecordingAndIdAreNotRepeated" classname="com.contentagent.vibestream.MixBuilderTest" time="0.0"/>
+  <testcase name="namedMixDoesNotImportUnrelatedLibrary" classname="com.contentagent.vibestream.MixBuilderTest" time="0.001"/>
+  <testcase name="languageAndMoodQueriesStayTogether" classname="com.contentagent.vibestream.MixBuilderTest" time="0.0"/>
+  <testcase name="blankOnboardingUsesExplicitFallbackOnly" classname="com.contentagent.vibestream.MixBuilderTest" time="0.001"/>
+  <testcase name="largeLibraryDoesNotCrowdOutDiscovery" classname="com.contentagent.vibestream.MixBuilderTest" time="0.003"/>
+  <testcase name="explicitLikesOutrankOldEarlySkips" classname="com.contentagent.vibestream.MixBuilderTest" time="0.0"/>
+  <testcase name="skippedArtistsDeprioritizedNotPermanentlyBanned" classname="com.contentagent.vibestream.MixBuilderTest" time="0.0"/>
+  <testcase name="emptyLibraryStillUsesRecentTitlesNotVideoUploader" classname="com.contentagent.vibestream.MixBuilderTest" time="0.002"/>
+  <testcase name="everyAvailableSourceContributesBeforeTruncation" classname="com.contentagent.vibestream.MixBuilderTest" time="0.0"/>
+  <testcase name="videoResultsNeverEnterMusicMix" classname="com.contentagent.vibestream.MixBuilderTest" time="0.0"/>
+  <testcase name="emptySourcesAndZeroLimitAreSafe" classname="com.contentagent.vibestream.MixBuilderTest" time="0.0"/>
+  <testcase name="discoveryPrefersNotRecentlyPlayed" classname="com.contentagent.vibestream.MixBuilderTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

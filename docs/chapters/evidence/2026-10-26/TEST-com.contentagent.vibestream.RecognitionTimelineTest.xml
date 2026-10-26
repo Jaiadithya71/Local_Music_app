@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.contentagent.vibestream.RecognitionTimelineTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-26T14:02:14" hostname="runnervmtai0g" time="0.007">
+  <properties/>
+  <testcase name="repeatedSongsAreNotGloballyDeduped" classname="com.contentagent.vibestream.RecognitionTimelineTest" time="0.002"/>
+  <testcase name="emptyResultsAreExplicitlyUnknown" classname="com.contentagent.vibestream.RecognitionTimelineTest" time="0.0"/>
+  <testcase name="windowsCoverStartAndEndAndStayBounded" classname="com.contentagent.vibestream.RecognitionTimelineTest" time="0.005"/>
+  <testcase name="unmatchedGapRemainsUnknown" classname="com.contentagent.vibestream.RecognitionTimelineTest" time="0.0"/>
+  <testcase name="isolatedMatchIsUnknownAndCannotInventSongName" classname="com.contentagent.vibestream.RecognitionTimelineTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

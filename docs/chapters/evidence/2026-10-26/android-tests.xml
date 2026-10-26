@@ -1,0 +1,12 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuite name="com.contentagent.vibestream.PlaybackSmokeTest" tests="4" failures="0" errors="0" skipped="0" time="16.119" timestamp="2026-10-26T14:06:11" hostname="localhost">
+  <properties>
+    <property name="device" value="emulator-5554 - 10" />
+    <property name="flavor" value="" />
+    <property name="project" value=":app" />
+  </properties>
+  <testcase name="localPcmPlaybackPauseSeekNextAndTimer" classname="com.contentagent.vibestream.PlaybackSmokeTest" time="6.51" />
+  <testcase name="compilationAppSessionAndHeadsetNextStayInsideRecording" classname="com.contentagent.vibestream.PlaybackSmokeTest" time="5.003" />
+  <testcase name="aacAndOpusDecodeThroughRealPlaybackService" classname="com.contentagent.vibestream.PlaybackSmokeTest" time="2.521" />
+  <testcase name="boundedDecoderHandlesAacOpusAndPcmWithoutMicrophone" classname="com.contentagent.vibestream.PlaybackSmokeTest" time="1.032" />
+</testsuite>

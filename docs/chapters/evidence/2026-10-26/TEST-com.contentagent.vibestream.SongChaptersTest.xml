@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.contentagent.vibestream.SongChaptersTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-10-26T14:02:14" hostname="runnervmtai0g" time="0.008">
+  <properties/>
+  <testcase name="timestampBeforeTitle" classname="com.contentagent.vibestream.SongChaptersTest" time="0.005"/>
+  <testcase name="timestampAfterTitleAndHourFormat" classname="com.contentagent.vibestream.SongChaptersTest" time="0.0"/>
+  <testcase name="filtersOutOfDurationAndDuplicateNativeChapters" classname="com.contentagent.vibestream.SongChaptersTest" time="0.0"/>
+  <testcase name="missingInitialZeroDoesNotInventATitledSong" classname="com.contentagent.vibestream.SongChaptersTest" time="0.0"/>
+  <testcase name="nextUsesActualUnequalBoundariesAndExitsAtLast" classname="com.contentagent.vibestream.SongChaptersTest" time="0.0"/>
+  <testcase name="previousRestartsCurrentThenGoesBack" classname="com.contentagent.vibestream.SongChaptersTest" time="0.0"/>
+  <testcase name="ignoresSingleTimestampAndMalformedOrScrambledLists" classname="com.contentagent.vibestream.SongChaptersTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
