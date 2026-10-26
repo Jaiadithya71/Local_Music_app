@@ -29,6 +29,7 @@ class PlaybackSmokeTest {
             if (predicate()) return
             Thread.sleep(100)
         }
+        android.util.Log.e("PlaybackBenchmark", "Timeout: $label; session=${PlaybackService.audioSessionId}; format=${PlaybackService.audioFormatSummary}")
         assertTrue(label, predicate())
     }
     private fun tone(name: String, frequency: Double): Song {
@@ -69,6 +70,7 @@ class PlaybackSmokeTest {
                 android.util.Log.i("PlaybackBenchmark", "$filename decoded: ${PlaybackService.audioFormatSummary}")
             }
         } finally {
+            android.util.Log.i("PlaybackBenchmark", "Final state: playing=${controller.isPlaying.value}, song=${controller.currentSong.value?.id}, error=${controller.errorMessage.value}")
             onMain { controller.release() }
             scenario.close()
             context.stopService(Intent(context, PlaybackService::class.java))
@@ -105,6 +107,7 @@ class PlaybackSmokeTest {
             await("timer pauses actual playback") { !controller.isPlaying.value && controller.sleepEndAtMs.value == null }
             assertNull(controller.errorMessage.value)
         } finally {
+            android.util.Log.i("PlaybackBenchmark", "Final state: playing=${controller.isPlaying.value}, song=${controller.currentSong.value?.id}, error=${controller.errorMessage.value}")
             onMain { controller.release() }
             scenario.close()
             context.stopService(Intent(context, PlaybackService::class.java))

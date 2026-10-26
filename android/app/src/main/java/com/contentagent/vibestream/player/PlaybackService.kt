@@ -114,7 +114,10 @@ class PlaybackService : MediaSessionService() {
             .setAllowCrossProtocolRedirects(true)
             .setConnectTimeoutMs(15000)
             .setReadTimeoutMs(20000)
-        val factory = ResolvingDataSource.Factory(http) { spec: DataSpec ->
+        // DefaultHttpDataSource alone rejects file:// offline tracks. The default
+        // wrapper selects the file/asset/content reader and delegates HTTP only.
+        val sources = androidx.media3.datasource.DefaultDataSource.Factory(this, http)
+        val factory = ResolvingDataSource.Factory(sources) { spec: DataSpec ->
             val u = spec.uri.toString()
             if (u.contains("googlevideo.com")) {
                 val ua = when {
