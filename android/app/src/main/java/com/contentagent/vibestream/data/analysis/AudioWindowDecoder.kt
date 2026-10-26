@@ -80,7 +80,9 @@ class AudioWindowDecoder {
                                         buffer.float.toDouble().coerceIn(-1.0, 1.0) * 32767 else buffer.short.toDouble()
                                 }
                                 val timeUs = info.presentationTimeUs + frame * 1_000_000.0 / rate
-                                if (timeUs >= nextOutputUs && timeUs < endUs && output.size < seconds * 16000) {
+                                // Nearest-neighbor feasibility output, not a production
+                                // fingerprint resampler. Handles low source rates too.
+                                while (timeUs >= nextOutputUs && nextOutputUs < endUs && output.size < seconds * 16000) {
                                     output.add((mono / channels).toInt().coerceIn(-32768, 32767).toShort())
                                     nextOutputUs += 1_000_000.0 / 16000
                                 }

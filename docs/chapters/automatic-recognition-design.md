@@ -57,3 +57,10 @@ manual annotation. Publisher metadata is one input, not a universal solution.
 Android decoder references:
 https://developer.android.com/reference/android/media/MediaExtractor
 https://developer.android.com/reference/android/media/MediaCodec
+
+## Prototype state
+AudioWindowDecoder is only an unconnected decoding feasibility probe. Its current
+nearest-neighbor rate conversion is NOT approved as fingerprint-quality
+resampling; anti-alias filtering and an independent golden-signature comparison
+are still required. RecognitionTimeline uses fixture observations, not a catalog.
+No endpoint client or signature generator has been imported or wired up.
