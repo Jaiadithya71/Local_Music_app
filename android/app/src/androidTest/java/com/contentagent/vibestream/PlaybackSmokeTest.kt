@@ -117,6 +117,24 @@ class PlaybackSmokeTest {
         }
     }
 
+    @Test fun boundedDecoderHandlesAacOpusAndPcmWithoutMicrophone() {
+        for (filename in listOf("generated-aac.m4a", "generated-opus.webm")) {
+            val file = File(context.filesDir, "decode-$filename")
+            instrumentation.context.assets.open(filename).use { input -> file.outputStream().use { input.copyTo(it) } }
+            val window = com.contentagent.vibestream.data.analysis.AudioWindowDecoder().decode(file.absolutePath, 1000, 3)
+            assertEquals(1000L, window.startMs)
+            assertTrue("$filename produced bounded mono PCM: ${window.pcm16k.size}", window.pcm16k.size in 46000..48000)
+            assertTrue(window.pcm16k.any { kotlin.math.abs(it.toInt()) > 100 })
+            file.delete()
+        }
+        val fixture = tone("decode-pcm", 440.0)
+        val window = com.contentagent.vibestream.data.analysis.AudioWindowDecoder().decode(fixture.localFilePath!!, 2000, 3)
+        assertEquals(48000, window.pcm16k.size)
+        assertTrue(window.pcm16k.any { kotlin.math.abs(it.toInt()) > 100 })
+        File(fixture.localFilePath!!).delete()
+        android.util.Log.i("PlaybackBenchmark", "Bounded AAC/Opus/PCM decoder generated 16k mono windows without microphone")
+    }
+
     @Test fun aacAndOpusDecodeThroughRealPlaybackService() {
         context.getSharedPreferences("vibestream_taste", 0).edit().putBoolean("done", true).commit()
         val scenario = ActivityScenario.launch(MainActivity::class.java)
