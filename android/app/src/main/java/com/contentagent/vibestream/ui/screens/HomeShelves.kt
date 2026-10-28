@@ -25,6 +25,7 @@ import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 import com.contentagent.vibestream.data.extractor.YouTubeExtractor
 import com.contentagent.vibestream.data.model.Song
+import com.contentagent.vibestream.data.recommendation.DiscoveryPolicy
 import com.contentagent.vibestream.ui.theme.*
 
 private val shelves = listOf(
@@ -59,20 +60,10 @@ private fun rankForTaste(items: List<Song>, likedArtists: Set<String>, skippedAr
     }
 }
 
-private fun restoreMoodMix(ctx: android.content.Context): List<Song> {
-    val json = shelfPrefs(ctx).getString("mood_mix", null) ?: return emptyList()
-    val type = object : com.google.gson.reflect.TypeToken<List<Song>>() {}.type
-    return try { com.google.gson.Gson().fromJson(json, type) ?: emptyList() } catch (e: Exception) { emptyList() }
-}
-
-private fun saveMoodMix(ctx: android.content.Context, songs: List<Song>) {
-    shelfPrefs(ctx).edit().putString("mood_mix", com.google.gson.Gson().toJson(songs)).apply()
-}
-
 private fun shelfPrefs(ctx: android.content.Context) =
     ctx.getSharedPreferences("vibestream_shelves", android.content.Context.MODE_PRIVATE)
 
-private fun cacheKey(query: String, musicOnly: Boolean) = "v2|" + (if (musicOnly) "M|" else "A|") + query
+private fun cacheKey(query: String, musicOnly: Boolean) = "discovery-v3|" + (if (musicOnly) "M|" else "A|") + query
 
 private fun restoreShelves(ctx: android.content.Context, queries: List<String>, musicOnly: Boolean) {
     val gson = com.google.gson.Gson()
@@ -87,13 +78,13 @@ private fun restoreShelves(ctx: android.content.Context, queries: List<String>, 
 }
 
 /** Fetches a shelf, keeps showing cached songs if the refresh fails. */
-private suspend fun loadShelf(ctx: android.content.Context, extractor: YouTubeExtractor, query: String, musicOnly: Boolean) {
+private suspend fun loadShelf(ctx: android.content.Context, search: suspend (String, Boolean) -> List<Song>, query: String, musicOnly: Boolean) {
     val k = cacheKey(query, musicOnly)
     ShelfCache.failed.remove(k)
     var result: List<Song> = emptyList()
     for (attempt in 1..2) {
         result = try {
-            kotlinx.coroutines.withTimeout(20_000) { extractor.searchSongs(query, musicOnly) }
+            kotlinx.coroutines.withTimeout(20_000) { search(query, musicOnly) }
         } catch (e: Exception) { emptyList() }
         if (result.isNotEmpty()) break
     }
@@ -103,8 +94,8 @@ private suspend fun loadShelf(ctx: android.content.Context, extractor: YouTubeEx
         val seenSet = ShelfCache.seen.getOrPut(k) { mutableSetOf() }
         val window = rankForTaste(clean.filter { it.id !in seenSet }, likedArtistsProvider(), skippedArtistsProvider()).take(12)
         seenSet.addAll(window.map { it.id })
-        ShelfCache.data[k] = window
-        shelfPrefs(ctx).edit().putString(k, com.google.gson.Gson().toJson(window)).apply()
+        ShelfCache.data[k] = clean
+        shelfPrefs(ctx).edit().putString(k, com.google.gson.Gson().toJson(clean)).apply()
     } else if (ShelfCache.data[k] == null) {
         ShelfCache.failed[k] = true
     }
@@ -120,7 +111,7 @@ private var skippedArtistsProvider: () -> Set<String> = { emptySet() }
  * most-liked artist, then "new ...") so the shelf keeps serving fresh picks
  * instead of the same static list.
  */
-private suspend fun showMore(ctx: android.content.Context, extractor: YouTubeExtractor, query: String, musicOnly: Boolean, driftArtist: String?) {
+private suspend fun showMore(ctx: android.content.Context, search: suspend (String, Boolean) -> List<Song>, query: String, musicOnly: Boolean, driftArtist: String?) {
     val k = cacheKey(query, musicOnly)
     if (ShelfCache.loadingMore[k] == true) return
     ShelfCache.loadingMore[k] = true
@@ -139,7 +130,7 @@ private suspend fun showMore(ctx: android.content.Context, extractor: YouTubeExt
                 else -> driftArtist?.let { "$it songs" } ?: "new $query"
             }
             val result: List<Song> = try {
-                kotlinx.coroutines.withTimeout(20_000) { extractor.searchSongs(q2, musicOnly) }
+                kotlinx.coroutines.withTimeout(20_000) { search(q2, musicOnly) }
             } catch (e: Exception) { emptyList() }
             val existing = (ShelfCache.pool[k] ?: emptyList()).map { it.id }.toHashSet()
             val fresh = result.map { it.copy(streamUrl = null) }.filter { it.id !in seenSet && it.id !in existing }
@@ -161,10 +152,12 @@ private suspend fun showMore(ctx: android.content.Context, extractor: YouTubeExt
 @Composable
 fun HomeShelves(
     extractor: YouTubeExtractor,
+    search: suspend (String, Boolean) -> List<Song> = { q, m -> extractor.searchSongs(q, m) },
     currentSongId: String?,
     onPlay: (Song, List<Song>) -> Unit,
     onSeeAll: (String) -> Unit,
     recent: List<Song> = emptyList(),
+    playedKeys: Set<String> = emptySet(),
     liked: List<Song> = emptyList(),
     playlists: List<com.contentagent.vibestream.data.local.Playlist> = emptyList(),
     onPlayMood: (List<Song>) -> Unit = {},
@@ -175,10 +168,6 @@ fun HomeShelves(
 ) {
     val scope = rememberCoroutineScope()
     val ctx = androidx.compose.ui.platform.LocalContext.current
-    // Top picks follow what he plays and likes: most frequent artist across liked + recent.
-    val topArtist = (liked + recent).groupingBy { it.artist }.eachCount()
-        .filterKeys { it.isNotBlank() && it != "Unknown Artist" && it != "YouTube" }
-        .maxByOrNull { it.value }?.key
     // Taste onboarding answers seed the shelves; defaults when skipped.
     val profile = remember { com.contentagent.vibestream.data.local.TasteStore(ctx).load() }
     likedArtistsProvider = { liked.map { it.artist }.toSet() }
@@ -192,26 +181,36 @@ fun HomeShelves(
     val shelfList = remember(homeSeed, profile) {
         listOf(homeSeed.label to homeSeed.query) + tasteShelves.ifEmpty { shelves.drop(1) }
     }
-    val seedQueries = com.contentagent.vibestream.data.recommendation.TasteQueries.seeds(
-        profile.languages, profile.moods, profile.artists)
+    var discoveryRound by remember { mutableStateOf(shelfPrefs(ctx).getInt("discovery_round", 0) + 1) }
+    var refreshing by remember { mutableStateOf(false) }
+    val known = playedKeys + (recent + liked + playlists.flatMap { it.songs }).flatMap { DiscoveryPolicy.keys(it) }
+    val seedQueries = DiscoveryPolicy.queries(profile.languages, profile.moods, profile.artists, discoveryRound)
     val seedSongs = seedQueries.flatMap { ShelfCache.data[cacheKey(it, musicOnly)] ?: emptyList() }
-    var moodMix by remember { mutableStateOf(restoreMoodMix(ctx)) }
+    val discoveryPool = shelfList.flatMap { ShelfCache.data[cacheKey(it.second, musicOnly)] ?: emptyList() } + seedSongs
+    val moodMix = DiscoveryPolicy.fresh(discoveryPool, known, skippedArtists, musicOnly = musicOnly)
     // Show cached shelves instantly, then refresh one at a time in the background.
-    LaunchedEffect(shelfList, musicOnly) {
-        restoreShelves(ctx, shelfList.map { it.second }, musicOnly)
-        for ((_, q) in shelfList) loadShelf(ctx, extractor, q, musicOnly)
-        for (q in seedQueries) if (ShelfCache.data[cacheKey(q, musicOnly)] == null) loadShelf(ctx, extractor, q, musicOnly)
-        val freshSeeds = seedQueries.flatMap { ShelfCache.data[cacheKey(it, musicOnly)] ?: emptyList() }
-        moodMix = com.contentagent.vibestream.data.recommendation.MixBuilder.build(
-            liked, recent, playlists.flatMap { it.songs }, freshSeeds, skippedArtists)
-        if (moodMix.isNotEmpty()) saveMoodMix(ctx, moodMix)
-    }
-    // Keep the mix in step with his library without hitting the network.
-    LaunchedEffect(liked, recent, playlists, seedSongs, skippedArtists, musicOnly) {
-        val rebuilt = com.contentagent.vibestream.data.recommendation.MixBuilder.build(
-            liked, recent, playlists.flatMap { it.songs }, seedSongs, skippedArtists)
-        moodMix = rebuilt
-        saveMoodMix(ctx, rebuilt)
+    LaunchedEffect(shelfList, musicOnly, discoveryRound) {
+        refreshing = true
+        shelfPrefs(ctx).edit().putInt("discovery_round", discoveryRound).apply()
+        try {
+            restoreShelves(ctx, shelfList.map { it.second }, musicOnly)
+            // Different taste-scoped queries refill the pool, not exact played titles.
+            for (q in (seedQueries + shelfList.map { it.second }).distinct()) {
+                loadShelf(ctx, search, q, musicOnly)
+            }
+            // A depleted first batch gets one bounded automatic expansion. Never
+            // substitute history on a catalog outage or after exhaustion.
+            val pool = (seedQueries + shelfList.map { it.second }).flatMap { ShelfCache.data[cacheKey(it, musicOnly)] ?: emptyList() }
+            if (DiscoveryPolicy.fresh(pool, known, musicOnly = musicOnly).size < 8) {
+                val extra = DiscoveryPolicy.queries(profile.languages, profile.moods, profile.artists, discoveryRound + 1)
+                for (q in extra.filter { it !in seedQueries }) {
+                    loadShelf(ctx, search, q, musicOnly)
+                    val additions = ShelfCache.data[cacheKey(q, musicOnly)] ?: emptyList()
+                    val key = cacheKey(shelfList.first().second, musicOnly)
+                    ShelfCache.data[key] = ((ShelfCache.data[key] ?: emptyList()) + additions).distinctBy { it.id }
+                }
+            }
+        } finally { refreshing = false }
     }
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
         item {
@@ -260,15 +259,23 @@ fun HomeShelves(
         val namedMixes: List<Triple<String, String, List<Song>>> = run {
             val out = mutableListOf<Triple<String, String, List<Song>>>()
             if (moodMix.isNotEmpty()) {
-                out.add(Triple("Your mood", "Favourites and fresh picks from your taste", moodMix))
+                out.add(Triple("Your mood", "New-to-you picks from your taste", moodMix))
             }
             for ((name, sub, q) in mixDefs) {
                 val base = ShelfCache.data[cacheKey(q, musicOnly)] ?: continue
-                val songs = com.contentagent.vibestream.data.recommendation.MixBuilder.build(
-                    emptyList(), emptyList(), emptyList(), base, skippedArtists)
+                val songs = DiscoveryPolicy.fresh(base, known, skippedArtists, musicOnly = musicOnly)
                 if (songs.size >= 5) out.add(Triple(name, sub, songs))
             }
             out
+        }
+        item {
+            Row(modifier = Modifier.padding(horizontal = 16.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Text(if (refreshing) "Finding new-to-you songs..." else if (moodMix.isEmpty()) "No new-to-you picks loaded. Retry or edit your taste." else "Discovery excludes your known songs", color = TextSecondary, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                androidx.compose.material3.TextButton(enabled = !refreshing, onClick = {
+                    discoveryRound++
+                    shelfPrefs(ctx).edit().putInt("discovery_round", discoveryRound).apply()
+                }) { Text("Refresh", color = AmberOrange) }
+            }
         }
         if (namedMixes.isNotEmpty()) {
             item {
@@ -374,7 +381,7 @@ fun HomeShelves(
             }
         }
         items(shelfList) { (title, query) ->
-            val songs = ShelfCache.data[cacheKey(query, musicOnly)]
+            val songs = ShelfCache.data[cacheKey(query, musicOnly)]?.let { DiscoveryPolicy.fresh(it, known, skippedArtists, limit = it.size, musicOnly = musicOnly) }
             val failed = ShelfCache.failed[cacheKey(query, musicOnly)] == true
             Column(modifier = Modifier.padding(top = 16.dp)) {
                 Text(
@@ -384,7 +391,7 @@ fun HomeShelves(
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier
                         .padding(horizontal = 16.dp, vertical = 8.dp)
-                        .clickable { onSeeAll(query) }
+
                 )
                 val list = songs
                 if (list == null) {
@@ -392,7 +399,7 @@ fun HomeShelves(
                         if (failed) {
                             Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
                                 Text("Could not load this shelf", color = TextSecondary, fontSize = 13.sp)
-                                androidx.compose.material3.TextButton(onClick = { scope.launch { loadShelf(ctx, extractor, query, musicOnly) } }) {
+                                androidx.compose.material3.TextButton(onClick = { scope.launch { loadShelf(ctx, search, query, musicOnly) } }) {
                                     Text("Retry", color = AmberOrange)
                                 }
                             }
@@ -400,6 +407,8 @@ fun HomeShelves(
                             CircularProgressIndicator(color = AmberOrange, modifier = Modifier.size(24.dp))
                         }
                     }
+                } else if (list.isEmpty()) {
+                    Text("No new-to-you picks in this shelf. Refresh for more.", color = TextSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp))
                 } else {
                     LazyRow(
                         contentPadding = PaddingValues(horizontal = 16.dp),
@@ -440,7 +449,7 @@ fun HomeShelves(
                                     .clip(RoundedCornerShape(6.dp))
                                     .background(DarkSurfaceElevated)
                                     .clickable(enabled = !loading) {
-                                        scope.launch { showMore(ctx, extractor, query, musicOnly, topArtist) }
+                                        scope.launch { showMore(ctx, search, query, musicOnly, null) }
                                     }
                                     .padding(8.dp),
                                 horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,

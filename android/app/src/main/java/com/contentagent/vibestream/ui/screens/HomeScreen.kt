@@ -97,6 +97,7 @@ fun HomeScreen(
     val playerError by playerController.errorMessage.collectAsState()
     val likedSongs by library.liked.collectAsState()
     val recentSongs by library.recent.collectAsState()
+    val playedKeys by library.playedKeys.collectAsState()
     val userPlaylists by library.playlists.collectAsState()
     val artistSkips by library.artistSkips.collectAsState()
     var librarySection by remember { mutableStateOf(0) } // 0 downloads, 1 liked, 2 playlists, 3 recent
@@ -706,6 +707,7 @@ fun HomeScreen(
             } else {
                 HomeShelves(
                     recent = recentSongs,
+                    playedKeys = playedKeys,
                     liked = likedSongs,
                     playlists = userPlaylists,
                     musicOnly = musicOnly,

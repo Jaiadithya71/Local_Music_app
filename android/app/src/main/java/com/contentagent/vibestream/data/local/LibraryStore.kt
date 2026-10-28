@@ -24,6 +24,21 @@ class LibraryStore(context: Context) {
     private val _playlists = MutableStateFlow<List<Playlist>>(load<Playlist>("playlists"))
     val playlists: StateFlow<List<Playlist>> = _playlists.asStateFlow()
 
+    // Local-only compact ledger survives the 30-item Recent window. Old discarded
+    // history cannot be recovered; migrate only the records actually retained.
+    private val _playedKeys = MutableStateFlow(
+        (prefs.getStringSet("played_keys_v1", emptySet()) ?: emptySet()).toSet() +
+            _recent.value.flatMap { com.contentagent.vibestream.data.recommendation.DiscoveryPolicy.keys(it) })
+    val playedKeys: StateFlow<Set<String>> = _playedKeys.asStateFlow()
+
+    private fun rememberPlayed(songs: List<Song>) {
+        val keys = _playedKeys.value + songs.flatMap { com.contentagent.vibestream.data.recommendation.DiscoveryPolicy.keys(it) }
+        _playedKeys.value = keys
+        prefs.edit().putStringSet("played_keys_v1", keys).apply()
+    }
+
+    init { rememberPlayed(_recent.value) }
+
     // Negative taste signal: how often an artist's song was skipped early.
     private val _artistSkips = MutableStateFlow(loadSkips())
     val artistSkips: StateFlow<Map<String, Int>> = _artistSkips.asStateFlow()
@@ -65,6 +80,7 @@ class LibraryStore(context: Context) {
     }
 
     fun addRecent(song: Song) {
+        rememberPlayed(listOf(song))
         val list = (listOf(clean(song)) + _recent.value.filter { it.id != song.id }).take(30)
         _recent.value = list
         save("recent", list)
@@ -110,6 +126,7 @@ class LibraryStore(context: Context) {
             save("liked", merged)
         }
         if (recentSongs.isNotEmpty()) {
+            rememberPlayed(recentSongs)
             val merged = _recent.value.toMutableList()
             for (s in recentSongs) if (merged.none { it.id == s.id }) merged.add(clean(s))
             val trimmed = merged.take(30)
