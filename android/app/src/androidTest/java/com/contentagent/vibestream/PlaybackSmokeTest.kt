@@ -67,6 +67,7 @@ class PlaybackSmokeTest {
                 await("$filename decoded format reported") { PlaybackService.audioFormatSummary.contains(mime) && PlaybackService.audioFormatSummary.contains(rate) }
                 await("$filename clock advances") { controller.currentPosition.value >= 500 }
                 assertNull(controller.errorMessage.value)
+                assertTrue("service persists played ID", com.contentagent.vibestream.data.local.LibraryStore(context).playedKeys.value.contains("id:$filename"))
                 android.util.Log.i("PlaybackBenchmark", "$filename decoded: ${PlaybackService.audioFormatSummary}")
             }
         } finally {

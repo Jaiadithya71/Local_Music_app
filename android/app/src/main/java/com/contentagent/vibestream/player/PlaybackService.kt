@@ -163,6 +163,16 @@ class PlaybackService : MediaSessionService() {
         })
         audioSessionId = exo.audioSessionId
         exo.addListener(object : Player.Listener {
+            override fun onMediaItemTransition(item: androidx.media3.common.MediaItem?, reason: Int) {
+                if (item != null && item.mediaId.isNotBlank()) {
+                    // The service owns background transitions. Do not depend on a
+                    // foreground Compose observer to remember what was played.
+                    com.contentagent.vibestream.data.local.LibraryStore(this@PlaybackService).recordPlayed(
+                        com.contentagent.vibestream.data.model.Song(
+                            item.mediaId, item.mediaMetadata.title?.toString().orEmpty(),
+                            item.mediaMetadata.artist?.toString().orEmpty()))
+                }
+            }
             override fun onAudioSessionIdChanged(audioSessionId: Int) {
                 PlaybackService.audioSessionId = audioSessionId
             }

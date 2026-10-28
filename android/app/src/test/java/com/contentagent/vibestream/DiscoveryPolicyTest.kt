@@ -90,6 +90,15 @@ class DiscoveryPersistenceTest {
         assertEquals("id3", upgraded.playlists.value.single().songs.single().id)
         assertTrue(upgraded.playedKeys.value.containsAll(D.keys(song(2))))
     }
+    @Test fun serviceAndForegroundInstancesCannotOverwritePlayedLedger() {
+        ctx.getSharedPreferences("vibestream_library", 0).edit().clear().commit()
+        val foreground = LibraryStore(ctx)
+        LibraryStore(ctx).recordPlayed(song(99))
+        foreground.addRecent(song(1))
+        val keys = LibraryStore(ctx).playedKeys.value
+        assertTrue(keys.containsAll(D.keys(song(99))))
+        assertTrue(keys.containsAll(D.keys(song(1))))
+    }
     @Test fun importedHistoryBeyondThirtyIsRemembered() {
         ctx.getSharedPreferences("vibestream_library", 0).edit().clear().commit()
         val lib = LibraryStore(ctx)

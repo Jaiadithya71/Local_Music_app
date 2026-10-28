@@ -32,12 +32,15 @@ class LibraryStore(context: Context) {
     val playedKeys: StateFlow<Set<String>> = _playedKeys.asStateFlow()
 
     private fun rememberPlayed(songs: List<Song>) {
-        val keys = _playedKeys.value + songs.flatMap { com.contentagent.vibestream.data.recommendation.DiscoveryPolicy.keys(it) }
+        val keys = _playedKeys.value + (prefs.getStringSet("played_keys_v1", emptySet()) ?: emptySet()) + songs.flatMap { com.contentagent.vibestream.data.recommendation.DiscoveryPolicy.keys(it) }
         _playedKeys.value = keys
         prefs.edit().putStringSet("played_keys_v1", keys).apply()
     }
 
     init { rememberPlayed(_recent.value) }
+
+    /** Also called by the service while Home is not composed. */
+    fun recordPlayed(song: Song) { rememberPlayed(listOf(song)) }
 
     // Negative taste signal: how often an artist's song was skipped early.
     private val _artistSkips = MutableStateFlow(loadSkips())

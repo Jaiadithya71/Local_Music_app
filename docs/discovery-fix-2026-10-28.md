@@ -10,6 +10,7 @@ The previous mood mix interleaved liked, recent and playlist tracks with search 
 - No history/liked fallback if the public catalog fails or has no new-to-you candidates. The UI reports the shortage and offers Refresh/Edit taste.
 - Language/mood/selected-artist queries rotate on refresh/re-entry. A depleted result batch gets one bounded expansion. No unrelated video-uploader drift.
 - Selection happens after cache restore and again after a play signal. Old shelf cache version and legacy mood cache are no longer used; library data is not cleared.
+- Background playback service transitions also write the ledger, so screen-off plays are not dependent on a visible Home observer. Foreground writes merge the persisted ledger instead of overwriting service records.
 - A local ID/title ledger remembers new plays beyond the30-item Recent display. It migrates retained records and remembers imported history before trimming. Discarded past history cannot be reconstructed.
 - Unicode title normalization keeps combining marks, including Tamil. Common audio/video/lyric label changes and alternate upload IDs are filtered. This is conservative metadata matching, not acoustic fingerprinting; alternate spellings may escape and same-title songs may be excluded.
 
