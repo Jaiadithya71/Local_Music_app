@@ -72,4 +72,25 @@ class DiscoveryHomeTest {
             out.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
         }
     }
+    @Test fun exhaustedHomeShowsNoReplayMix() {
+        val ctx = ApplicationProvider.getApplicationContext<Context>()
+        ctx.getSharedPreferences("vibestream_shelves", 0).edit().clear().commit()
+        TasteStore(ctx).save(TasteProfile(listOf("Japanese")))
+        val old = Song("known", "Known fixture", "Fixture artist")
+        var queue = emptyList<Song>()
+        compose.setContent {
+            VibeStreamTheme {
+                androidx.compose.material3.Surface(color = com.contentagent.vibestream.ui.theme.DarkBackground) {
+                    HomeShelves(YouTubeExtractor(), search = { _, _ -> listOf(old) },
+                        currentSongId = null, onPlay = { _, q -> queue = q }, onSeeAll = {},
+                        recent = listOf(old), playedKeys = DiscoveryPolicy.keys(old), onPlayMood = { queue = it })
+                }
+            }
+        }
+        compose.waitForIdle()
+        compose.onNodeWithText("Your mood").assertDoesNotExist()
+        compose.onNodeWithText("No new-to-you picks loaded. Retry or edit your taste.").assertExists()
+        compose.runOnIdle { assertTrue(queue.isEmpty()) }
+    }
+
 }
