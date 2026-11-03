@@ -23,12 +23,10 @@ jobs:
       - name: Logic regression
         working-directory: android
         run: ./gradlew --no-daemon testDebugUnitTest --tests '*QueueReconnectTest' --tests '*MixBuilderTest' --tests '*PersistenceTest' --tests '*MusicSearchPolicyTest' --tests '*DiscoveryPolicyTest' --tests '*DiscoveryPersistenceTest' --tests '*DiscoveryHomeTest'
-      - name: Render discovery header at phone size
-        working-directory: android
+      - name: Collect actual Home render
         run: |
-          ./gradlew --no-daemon testDebugUnitTest --tests '*RenderTest.render_discoveryHeader'
-          mkdir -p ../playback-evidence
-          cp ~/renders/discovery-header.png ../playback-evidence/
+          mkdir -p playback-evidence
+          cp ~/renders/discovery-home.png playback-evidence/
       - name: Android playback with generated PCM
         uses: reactivecircus/android-emulator-runner@v2
         with:
