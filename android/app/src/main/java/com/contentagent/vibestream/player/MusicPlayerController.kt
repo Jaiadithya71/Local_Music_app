@@ -126,8 +126,32 @@ class MusicPlayerController(
 
     // ---- Queue persistence ----
     private var pendingResumeMs: Long? = null
+    private var playbackJob: Job? = null
+
+    // Read before connecting/listening: a live service must not make us skip the
+    // saved queue, or the next transition can overwrite it with an empty list.
+    private fun restoreQueueFor(item: MediaItem?) {
+        val saved = queueStore?.load()
+        val restored = QueueReconnect.reconcile(saved?.songs.orEmpty(), saved?.index ?: -1, item?.mediaId)
+        _queue.value = restored.songs
+        _queueIndex.value = restored.index
+        if (saved != null) {
+            _shuffle.value = saved.shuffle
+            _repeat.value = saved.repeat
+        }
+        if (item == null && restored.index in restored.songs.indices) {
+            _currentSong.value = restored.songs[restored.index]
+            pendingResumeMs = saved?.positionMs
+        } else if (item != null && restored.index in restored.songs.indices) {
+            _currentSong.value = restored.songs[restored.index]
+        } else if (item != null) {
+            restoreCurrentSong()
+            _currentSong.value?.let { _queue.value = listOf(it); _queueIndex.value = 0 }
+        }
+    }
 
     private fun persistQueue() {
+        if (_queue.value.isEmpty()) return // Never destroy a known saved session on reconnect.
         queueStore?.save(
             _queue.value, _queueIndex.value,
             controller?.currentPosition ?: 0L,
@@ -167,8 +191,9 @@ class MusicPlayerController(
         val q = _queue.value
         if (index !in q.indices) return
         _queueIndex.value = index
-        persistQueue()
+        pendingResumeMs = null
         startPlayback(q[index])
+        persistQueue()
     }
 
     // Smart shuffle: tracks already played in this shuffle pass are not repeated
@@ -296,7 +321,7 @@ class MusicPlayerController(
                         prefetchAlts.remove(q[idx].id)?.let { pendingCandidates.addAll(it) }
                     }
                 } else {
-                    restoreCurrentSong()
+                    restoreQueueFor(mediaItem)
                 }
                 plannedShuffleNext = -1
                 if (_sleepEndOfTrack.value && reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
@@ -341,23 +366,17 @@ class MusicPlayerController(
     init {
         playerScope.launch {
             try {
-                awaitController().addListener(listener)
+                val connected = awaitController()
+                // A selection made while the connection was pending wins.
+                if (_queue.value.isEmpty()) restoreQueueFor(connected.currentMediaItem)
+                connected.addListener(listener)
                 PlaybackService.nextHandler = { next() }
                 PlaybackService.previousHandler = { previous() }
-                restoreCurrentSong()
-                if (_currentSong.value == null) {
-                    // Cold start: bring back the last listening session without
-                    // starting playback. Play/next resolves the stream on demand.
-                    queueStore?.load()?.let { saved ->
-                        if (saved.index in saved.songs.indices) {
-                            _queue.value = saved.songs
-                            _queueIndex.value = saved.index
-                            _currentSong.value = saved.songs[saved.index]
-                            _shuffle.value = saved.shuffle
-                            _repeat.value = saved.repeat
-                            pendingResumeMs = saved.positionMs
-                        }
-                    }
+                if (connected.currentMediaItem != null && playbackJob?.isActive != true) {
+                    _isBuffering.value = connected.playbackState == Player.STATE_BUFFERING
+                    _duration.value = connected.duration.coerceAtLeast(0L)
+                    _currentPosition.value = connected.currentPosition
+                    scheduleNextPrefetch()
                 }
                 _isPlaying.value = controller?.isPlaying == true
                 if (_isPlaying.value) startProgressTracker()
@@ -480,17 +499,27 @@ class MusicPlayerController(
             _queue.value = listOf(song)
             _queueIndex.value = 0
         }
-        persistQueue()
+        pendingResumeMs = null
         startPlayback(song)
+        persistQueue()
     }
 
     private fun startPlayback(song: Song) {
         playbackGeneration++
         val generation = playbackGeneration
         prefetchJob?.cancel()
+        playbackJob?.cancel()
+        plannedShuffleNext = -1
+        // A tap is visible immediately, before network extraction completes.
+        controller?.pause()
+        _currentSong.value = song
+        _currentPosition.value = pendingResumeMs ?: 0L
+        _duration.value = song.durationSec * 1000L
+        _isPlaying.value = false
+        _isBuffering.value = true
         // Alternatives belong to this track, never to a previous selection.
         pendingCandidates.clear()
-        playerScope.launch {
+        playbackJob = playerScope.launch {
             _errorMessage.value = null
             _isBuffering.value = true
 

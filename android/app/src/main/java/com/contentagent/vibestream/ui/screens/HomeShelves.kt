@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
@@ -269,37 +270,22 @@ fun HomeShelves(
             out
         }
         item {
-            Row(modifier = Modifier.padding(horizontal = 16.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                Text(if (refreshing) "Finding new-to-you songs..." else if (moodMix.isEmpty()) "No new-to-you picks loaded. Retry or edit your taste." else "Discovery excludes your known songs", color = TextSecondary, fontSize = 12.sp, modifier = Modifier.weight(1f))
-                androidx.compose.material3.TextButton(enabled = !refreshing, onClick = {
-                    discoveryRound++
-                    shelfPrefs(ctx).edit().putInt("discovery_round", discoveryRound).apply()
-                }) { Text("Refresh", color = AmberOrange) }
-            }
+            DiscoveryHeader(
+                refreshing = refreshing,
+                empty = moodMix.isEmpty(),
+                onRefresh = {
+                    if (!refreshing) {
+                        refreshing = true
+                        discoveryRound++
+                        shelfPrefs(ctx).edit().putInt("discovery_round", discoveryRound).apply()
+                    }
+                },
+                onEditTaste = onEditTaste
+            )
         }
         if (namedMixes.isNotEmpty()) {
             item {
-                Column(modifier = Modifier.padding(top = 12.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
-                    ) {
-                        Text(
-                            "Made for you",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = TextPrimary,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.weight(1f)
-                        )
-                        androidx.compose.material3.IconButton(onClick = onEditTaste) {
-                            androidx.compose.material3.Icon(
-                                imageVector = Icons.Default.Edit,
-                                contentDescription = "Edit taste",
-                                tint = TextSecondary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
+                Column {
                     LazyRow(
                         contentPadding = PaddingValues(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -484,5 +470,38 @@ private fun ShelfArtwork(song: Song) {
             onError = { failed = true },
             modifier = Modifier.fillMaxSize()
         )
+    }
+}
+
+/** Shared by Home and the phone-size render regression. */
+@Composable
+fun DiscoveryHeader(refreshing: Boolean, empty: Boolean, onRefresh: () -> Unit, onEditTaste: () -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 6.dp, bottom = 10.dp)) {
+        Text(
+            if (refreshing) "Finding new-to-you songs..." else if (empty) "No new picks yet. Retry or edit your taste." else "Discovery excludes your known songs",
+            color = TextSecondary, fontSize = 12.sp
+        )
+        Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Text("Made for you", style = MaterialTheme.typography.titleMedium,
+                color = TextPrimary, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            androidx.compose.material3.FilledTonalButton(
+                enabled = !refreshing,
+                onClick = onRefresh,
+                shape = RoundedCornerShape(20.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
+                    containerColor = DarkSurfaceElevated, contentColor = AmberOrange,
+                    disabledContainerColor = DarkSurfaceElevated, disabledContentColor = TextSecondary)
+            ) {
+                if (refreshing) CircularProgressIndicator(Modifier.size(16.dp), color = AmberOrange, strokeWidth = 2.dp)
+                else androidx.compose.material3.Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(if (refreshing) "Finding..." else "New picks", fontSize = 12.sp)
+            }
+            Spacer(Modifier.width(4.dp))
+            androidx.compose.material3.IconButton(onClick = onEditTaste, modifier = Modifier.size(40.dp)) {
+                androidx.compose.material3.Icon(Icons.Default.Edit, contentDescription = "Edit taste", tint = TextSecondary, modifier = Modifier.size(20.dp))
+            }
+        }
     }
 }

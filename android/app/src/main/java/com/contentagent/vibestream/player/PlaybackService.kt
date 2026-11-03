@@ -167,7 +167,7 @@ class PlaybackService : MediaSessionService() {
                 if (item != null && item.mediaId.isNotBlank()) {
                     // The service owns background transitions. Do not depend on a
                     // foreground Compose observer to remember what was played.
-                    com.contentagent.vibestream.data.local.LibraryStore(this@PlaybackService).recordPlayed(
+                    com.contentagent.vibestream.data.local.LibraryStore(this@PlaybackService).addRecent(
                         com.contentagent.vibestream.data.model.Song(
                             item.mediaId, item.mediaMetadata.title?.toString().orEmpty(),
                             item.mediaMetadata.artist?.toString().orEmpty()))

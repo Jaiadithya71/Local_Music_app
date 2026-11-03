@@ -160,9 +160,6 @@ fun HomeScreen(
             ).show()
         }
     }
-    LaunchedEffect(currentSong?.id) {
-        currentSong?.let { library.addRecent(it) }
-    }
 
     fun performSearch(query: String) {
         if (query.isBlank()) return

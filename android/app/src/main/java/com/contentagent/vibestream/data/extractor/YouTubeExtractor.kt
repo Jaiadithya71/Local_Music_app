@@ -340,7 +340,9 @@ class YouTubeExtractor {
                 lastResolveError = "no progressive audio streams (of ${info.audioStreams.size} total)"
             }
             sorted
-        } catch (e: Throwable) {
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
             lastResolveError = "${e.javaClass.simpleName}: ${e.message}".take(160)
             emptyList()
         }

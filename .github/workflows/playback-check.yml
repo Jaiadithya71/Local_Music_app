@@ -1,7 +1,7 @@
 name: Playback regression
 on:
   push:
-    branches: [verification/audio-quality, verification/discovery-fix]
+    branches: [verification/audio-quality, verification/discovery-fix, verification/queue-reconnect]
   workflow_dispatch:
 permissions:
   contents: read
@@ -22,7 +22,13 @@ jobs:
           sudo udevadm trigger --name-match=kvm
       - name: Logic regression
         working-directory: android
-        run: ./gradlew --no-daemon testDebugUnitTest --tests '*MixBuilderTest' --tests '*PersistenceTest' --tests '*MusicSearchPolicyTest' --tests '*DiscoveryPolicyTest' --tests '*DiscoveryPersistenceTest' --tests '*DiscoveryHomeTest'
+        run: ./gradlew --no-daemon testDebugUnitTest --tests '*QueueReconnectTest' --tests '*MixBuilderTest' --tests '*PersistenceTest' --tests '*MusicSearchPolicyTest' --tests '*DiscoveryPolicyTest' --tests '*DiscoveryPersistenceTest' --tests '*DiscoveryHomeTest'
+      - name: Render discovery header at phone size
+        working-directory: android
+        run: |
+          ./gradlew --no-daemon testDebugUnitTest --tests '*RenderTest.render_discoveryHeader'
+          mkdir -p ../playback-evidence
+          cp ~/renders/discovery-header.png ../playback-evidence/
       - name: Android playback with generated PCM
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -37,6 +43,7 @@ jobs:
           name: playback-regression-evidence
           retention-days: 1
           path: |
+            /home/runner/renders/
             playback-evidence/
             android/app/build/reports/androidTests/
             android/app/build/outputs/androidTest-results/

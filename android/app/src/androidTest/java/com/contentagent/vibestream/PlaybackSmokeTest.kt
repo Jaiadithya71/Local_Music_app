@@ -77,6 +77,34 @@ class PlaybackSmokeTest {
             context.stopService(Intent(context, PlaybackService::class.java))
         }
     }
+    @Test fun queueSurvivesControllerRecreationWhileServicePlays() {
+        context.getSharedPreferences("vibestream_taste", 0).edit().putBoolean("done", true).commit()
+        val scenario = ActivityScenario.launch(MainActivity::class.java)
+        val store = com.contentagent.vibestream.data.local.QueueStore(context)
+        val first = tone("reconnect-a", 440.0)
+        val second = tone("reconnect-b", 660.0)
+        lateinit var controller: MusicPlayerController
+        try {
+            onMain { controller = MusicPlayerController(context, YouTubeExtractor(), store) }
+            onMain { controller.playSong(first, listOf(first, second)) }
+            await("first plays before recreation") { controller.isPlaying.value && controller.currentSong.value?.id == first.id }
+            onMain { controller.release() }
+            onMain { controller = MusicPlayerController(context, YouTubeExtractor(), store) }
+            await("live song and whole queue reconnect") {
+                controller.isPlaying.value && controller.queue.value.size == 2 && controller.currentSong.value?.id == first.id
+            }
+            assertEquals(0, controller.queueIndex.value)
+            onMain { controller.next() }
+            await("next advances after reconnect") { controller.currentSong.value?.id == second.id && controller.isPlaying.value }
+            assertEquals(1, controller.queueIndex.value)
+            assertEquals(2, store.load()!!.songs.size)
+        } finally {
+            onMain { controller.release() }
+            scenario.close()
+            context.stopService(Intent(context, PlaybackService::class.java))
+            File(first.localFilePath!!).delete(); File(second.localFilePath!!).delete()
+        }
+    }
     @Test fun localPcmPlaybackPauseSeekNextAndTimer() {
         // Foreground activity permits starting the actual media playback service.
         context.getSharedPreferences("vibestream_taste", 0).edit().putBoolean("done", true).commit()

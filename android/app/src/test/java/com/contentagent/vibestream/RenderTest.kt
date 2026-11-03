@@ -130,6 +130,22 @@ class RenderTest {
         ))
 
     @Test(timeout = 120000)
+    fun render_discoveryHeader() {
+        scenario { act ->
+            act.setContent {
+                VibeStreamTheme {
+                    androidx.compose.foundation.layout.Column {
+                        com.contentagent.vibestream.ui.screens.DiscoveryHeader(false, false, {}, {})
+                        com.contentagent.vibestream.ui.screens.DiscoveryHeader(true, false, {}, {})
+                    }
+                }
+            }
+            pump(act)
+            snapActivity(act, "discovery-header")
+        }
+    }
+
+    @Test(timeout = 120000)
     fun render_lyricsSynced() {
         scenario { act ->
             act.setContent {
