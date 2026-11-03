@@ -154,7 +154,8 @@ class MusicPlayerController(
         if (_queue.value.isEmpty()) return // Never destroy a known saved session on reconnect.
         queueStore?.save(
             _queue.value, _queueIndex.value,
-            controller?.currentPosition ?: 0L,
+            if (controller?.currentMediaItem?.mediaId == _queue.value.getOrNull(_queueIndex.value)?.id)
+                controller?.currentPosition ?: 0L else 0L,
             _shuffle.value, _repeat.value
         )
     }
