@@ -60,7 +60,7 @@ class DiscoveryHomeTest {
             assertEquals(15, queue.size)
             assertFalse(queue.any { it.id == "new1" })
         }
-        compose.onNodeWithText("Refresh").performClick()
+        compose.onNodeWithText("New picks").performClick()
         compose.waitForIdle()
         compose.runOnIdle { assertTrue(queries.distinct().size >= 4) }
         val out = File(System.getProperty("user.home"), "renders/discovery-home.png")
@@ -89,7 +89,7 @@ class DiscoveryHomeTest {
         }
         compose.waitForIdle()
         compose.onNodeWithText("Your mood").assertDoesNotExist()
-        compose.onNodeWithText("No new-to-you picks loaded. Retry or edit your taste.").assertExists()
+        compose.onNodeWithText("No new picks yet. Retry or edit your taste.").assertExists()
         compose.runOnIdle { assertTrue(queue.isEmpty()) }
     }
 
