@@ -161,6 +161,11 @@ fun HomeScreen(
         }
     }
 
+    // Loading selection is immediate; record history only once audio plays.
+    LaunchedEffect(currentSong?.id, isPlaying, isBuffering) {
+        if (isPlaying && !isBuffering) currentSong?.let { library.addRecent(it) }
+    }
+
     fun performSearch(query: String) {
         if (query.isBlank()) return
         focusManager.clearFocus()
