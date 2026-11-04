@@ -319,6 +319,7 @@ class MusicPlayerController(
                     _currentSong.value = q[idx]
                     if (old != idx) {
                         recoveryAttempts = 0
+                        urlRefreshAttempted = false
                         pendingCandidates.clear()
                         prefetchAlts.remove(q[idx].id)?.let { pendingCandidates.addAll(it) }
                     }
@@ -349,8 +350,9 @@ class MusicPlayerController(
                 val wasRequestedToPlay = controller?.playWhenReady == true
                 prefetchJob?.cancel()
                 val next = pendingCandidates.removeFirstOrNull()
-                if (song != null && recoveryAttempts < 5 && (next != null || recoveryAttempts < 1)) {
+                if (song != null && recoveryAttempts < 5 && (next != null || !urlRefreshAttempted)) {
                     recoveryAttempts++
+                    if (next == null) urlRefreshAttempted = true
                     lastPlayError = describe(error)
                     playbackGeneration++
                     val generation = playbackGeneration
@@ -436,6 +438,7 @@ class MusicPlayerController(
     // touching the player so it can never append an out-of-date track.
     private var playbackGeneration = 0
     private var recoveryAttempts = 0
+    private var urlRefreshAttempted = false
     private var prefetchJob: Job? = null
     // Alternate stream URLs per song id, kept for the onPlayerError fallback when a
     // prefetched item turns out to be a dead link at play time.
@@ -522,6 +525,7 @@ class MusicPlayerController(
 
     private fun startPlayback(song: Song) {
         recoveryAttempts = 0
+        urlRefreshAttempted = false
         playbackGeneration++
         val generation = playbackGeneration
         prefetchJob?.cancel()
