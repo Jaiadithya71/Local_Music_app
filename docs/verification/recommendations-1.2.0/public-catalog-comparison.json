@@ -1,0 +1,648 @@
+{
+  "baseline": "v1.1.4 keyword Tamil new releases",
+  "note": "Public example seeds, not user\u0027s likes; no human relevance or audio scoring",
+  "rows": [
+    {
+      "seed_id": "3wDiqlTNlfQ",
+      "baseline_count": 30,
+      "radio_count": 49,
+      "cold_radio_ms": 813,
+      "warm_cache_ms": 10,
+      "radio_fetch_calls_for_two_reads": 1,
+      "baseline_top20": [
+        {
+          "id": "sng0VbBxlJk",
+          "title": "Mutta Kalakki (From \"Youth\")",
+          "artist": "G. V. Prakash Kumar"
+        },
+        {
+          "id": "H0yac30EMTY",
+          "title": "Minnalgal Koothadum (From \"Polladhavan\")",
+          "artist": "Karthik"
+        },
+        {
+          "id": "FkH4uu1qGOA",
+          "title": "Pathikichu (From \"Vidaamuyarchi\")",
+          "artist": "Yogi Sekar"
+        },
+        {
+          "id": "TKV9C7xa8CA",
+          "title": "Bindaas",
+          "artist": "Deepthi Suresh"
+        },
+        {
+          "id": "iwRpdtPV-1g",
+          "title": "Urugi Urugi (From \"Joe\")",
+          "artist": "Siddhu Kumar"
+        },
+        {
+          "id": "jxPRbGlXkC0",
+          "title": "Idhuvum Kadandhu Pogum (The Healing Song) (From \"Netrikann\")",
+          "artist": "Sid Sriram"
+        },
+        {
+          "id": "52F9tnKSw4A",
+          "title": "Kannukulla",
+          "artist": "Sai Abhyankkar"
+        },
+        {
+          "id": "m87B0ulgN64",
+          "title": "Beast Mode (From \"Beast\")",
+          "artist": "Anirudh Ravichander"
+        },
+        {
+          "id": "r0VmFe3Ns8I",
+          "title": "Sithira Puthiri (From \"Think Indie\")",
+          "artist": "Sai Abhyankkar"
+        },
+        {
+          "id": "JzU99mOHP0A",
+          "title": "Idhazhin Oram (The Innocence of Love)",
+          "artist": "Anirudh Ravichander"
+        },
+        {
+          "id": "KmQiD0g6lZE",
+          "title": "Oorum Blood (From \"Dude\")",
+          "artist": "Sai Abhyankkar"
+        },
+        {
+          "id": "T4Q4kIuddKk",
+          "title": "Aaja Raja (From \"KH x RK Reunion\")",
+          "artist": "Anirudh Ravichander"
+        },
+        {
+          "id": "lPXl1__XtFI",
+          "title": "Verappa (From \"Karuppu\")",
+          "artist": "Sai Abhyankkar"
+        },
+        {
+          "id": "XJLd1Ooq_c8",
+          "title": "Manasilaayo (From \"Vettaiyan\")",
+          "artist": "Anirudh Ravichander"
+        },
+        {
+          "id": "9Agl2pr9mrk",
+          "title": "Goindhamma (From \"Meesaya Murukku 2\")",
+          "artist": "Hiphop Tamizha"
+        },
+        {
+          "id": "kXUY2xhX_rc",
+          "title": "Salambala (From \"Madharaasi\") (Tamil)",
+          "artist": "Anirudh Ravichander"
+        },
+        {
+          "id": "S5Gfs0beg3Q",
+          "title": "Adangaatha Asuran (From \"Raayan\")",
+          "artist": "A.R. Rahman"
+        },
+        {
+          "id": "me4lu_vyfbg",
+          "title": "Adaavadi (From \"Love Insurance Kompany\")",
+          "artist": "Anirudh Ravichander"
+        },
+        {
+          "id": "qemjcgBJMCE",
+          "title": "God Mode (From \"Karuppu\")",
+          "artist": "Sai Abhyankkar"
+        },
+        {
+          "id": "NAkQVL61BRI",
+          "title": "Raga of Revenge (From \"DC\")",
+          "artist": "Anirudh Ravichander"
+        }
+      ],
+      "new_top20": [
+        {
+          "id": "9OF_cF48mjA",
+          "title": "Raavana Mavandaa",
+          "artist": "Anirudh Ravichander"
+        },
+        {
+          "id": "unQlCp-lL6I",
+          "title": "Ranjithame",
+          "artist": "M.M. Manasi"
+        },
+        {
+          "id": "kXUY2xhX_rc",
+          "title": "Salambala (From \"Madharaasi\") (Tamil)",
+          "artist": "Anirudh Ravichander"
+        },
+        {
+          "id": "_Vp-jCG7gno",
+          "title": "God Mode",
+          "artist": "Sai Abhyankkar, Gana Muthu \u0026 Vishnu Edavan • 56M views • 272K likes"
+        },
+        {
+          "id": "IZHGcU0U_W0",
+          "title": "MATTA",
+          "artist": "Yuvan Shankar Raja, Shenbagaraj, Velu \u0026 Sam • 158M views • 744K likes"
+        },
+        {
+          "id": "ZL9HgvQZe8k",
+          "title": "Raavana Suthudae",
+          "artist": "Anirudh Ravichander"
+        },
+        {
+          "id": "tOM-nWPcR4U",
+          "title": "Illuminati",
+          "artist": "Dabzee • 461M views • 2.5M likes"
+        },
+        {
+          "id": "IsN-fqGzpHg",
+          "title": "Maamadura (From \"Jigarthanda DoubleX\")",
+          "artist": "Dhee \u0026 Santhosh Narayanan • 83M views • 414K likes"
+        },
+        {
+          "id": "sng0VbBxlJk",
+          "title": "Mutta Kalakki (From \"Youth\")",
+          "artist": "G. V. Prakash Kumar"
+        },
+        {
+          "id": "H0yac30EMTY",
+          "title": "Minnalgal Koothadum (From \"Polladhavan\")",
+          "artist": "Karthik"
+        },
+        {
+          "id": "2qCpY38ompo",
+          "title": "Monica",
+          "artist": "Sublahshini, Anirudh Ravichander \u0026 Asal Kolaar • 362M views • 1.3M likes"
+        },
+        {
+          "id": "FkH4uu1qGOA",
+          "title": "Pathikichu (From \"Vidaamuyarchi\")",
+          "artist": "Yogi Sekar"
+        },
+        {
+          "id": "c3H8GjrklCk",
+          "title": "Kalyana Virundhu (From \"Dorothy\")",
+          "artist": "Anthony Daasan, Priya Jerson, Ilaiyaraaja \u0026 Yugendran Vasudevan • 8.6M views • 34K likes"
+        },
+        {
+          "id": "TKV9C7xa8CA",
+          "title": "Bindaas",
+          "artist": "Deepthi Suresh"
+        },
+        {
+          "id": "eF9LRFbkHLQ",
+          "title": "Makkamishi",
+          "artist": "Paal Dabba \u0026 Dacalty • 132M views • 498K likes"
+        },
+        {
+          "id": "iwRpdtPV-1g",
+          "title": "Urugi Urugi (From \"Joe\")",
+          "artist": "Siddhu Kumar"
+        },
+        {
+          "id": "p1potl1sbjA",
+          "title": "Ravana Tandav",
+          "artist": "Vishal Dadlani"
+        },
+        {
+          "id": "jxPRbGlXkC0",
+          "title": "Idhuvum Kadandhu Pogum (The Healing Song) (From \"Netrikann\")",
+          "artist": "Sid Sriram"
+        },
+        {
+          "id": "6JaeasJw-QI",
+          "title": "Thalapathy Kacheri",
+          "artist": "Jayanth Maadhur"
+        },
+        {
+          "id": "52F9tnKSw4A",
+          "title": "Kannukulla",
+          "artist": "Sai Abhyankkar"
+        }
+      ],
+      "new_items_not_in_baseline_top20": 12,
+      "known_overlap": 0
+    },
+    {
+      "seed_id": "unQlCp-lL6I",
+      "baseline_count": 30,
+      "radio_count": 49,
+      "cold_radio_ms": 775,
+      "warm_cache_ms": 0,
+      "radio_fetch_calls_for_two_reads": 1,
+      "baseline_top20": [
+        {
+          "id": "sng0VbBxlJk",
+          "title": "Mutta Kalakki (From \"Youth\")",
+          "artist": "G. V. Prakash Kumar"
+        },
+        {
+          "id": "H0yac30EMTY",
+          "title": "Minnalgal Koothadum (From \"Polladhavan\")",
+          "artist": "Karthik"
+        },
+        {
+          "id": "FkH4uu1qGOA",
+          "title": "Pathikichu (From \"Vidaamuyarchi\")",
+          "artist": "Yogi Sekar"
+        },
+        {
+          "id": "TKV9C7xa8CA",
+          "title": "Bindaas",
+          "artist": "Deepthi Suresh"
+        },
+        {
+          "id": "iwRpdtPV-1g",
+          "title": "Urugi Urugi (From \"Joe\")",
+          "artist": "Siddhu Kumar"
+        },
+        {
+          "id": "jxPRbGlXkC0",
+          "title": "Idhuvum Kadandhu Pogum (The Healing Song) (From \"Netrikann\")",
+          "artist": "Sid Sriram"
+        },
+        {
+          "id": "52F9tnKSw4A",
+          "title": "Kannukulla",
+          "artist": "Sai Abhyankkar"
+        },
+        {
+          "id": "m87B0ulgN64",
+          "title": "Beast Mode (From \"Beast\")",
+          "artist": "Anirudh Ravichander"
+        },
+        {
+          "id": "r0VmFe3Ns8I",
+          "title": "Sithira Puthiri (From \"Think Indie\")",
+          "artist": "Sai Abhyankkar"
+        },
+        {
+          "id": "JzU99mOHP0A",
+          "title": "Idhazhin Oram (The Innocence of Love)",
+          "artist": "Anirudh Ravichander"
+        },
+        {
+          "id": "KmQiD0g6lZE",
+          "title": "Oorum Blood (From \"Dude\")",
+          "artist": "Sai Abhyankkar"
+        },
+        {
+          "id": "T4Q4kIuddKk",
+          "title": "Aaja Raja (From \"KH x RK Reunion\")",
+          "artist": "Anirudh Ravichander"
+        },
+        {
+          "id": "lPXl1__XtFI",
+          "title": "Verappa (From \"Karuppu\")",
+          "artist": "Sai Abhyankkar"
+        },
+        {
+          "id": "XJLd1Ooq_c8",
+          "title": "Manasilaayo (From \"Vettaiyan\")",
+          "artist": "Anirudh Ravichander"
+        },
+        {
+          "id": "9Agl2pr9mrk",
+          "title": "Goindhamma (From \"Meesaya Murukku 2\")",
+          "artist": "Hiphop Tamizha"
+        },
+        {
+          "id": "kXUY2xhX_rc",
+          "title": "Salambala (From \"Madharaasi\") (Tamil)",
+          "artist": "Anirudh Ravichander"
+        },
+        {
+          "id": "S5Gfs0beg3Q",
+          "title": "Adangaatha Asuran (From \"Raayan\")",
+          "artist": "A.R. Rahman"
+        },
+        {
+          "id": "me4lu_vyfbg",
+          "title": "Adaavadi (From \"Love Insurance Kompany\")",
+          "artist": "Anirudh Ravichander"
+        },
+        {
+          "id": "qemjcgBJMCE",
+          "title": "God Mode (From \"Karuppu\")",
+          "artist": "Sai Abhyankkar"
+        },
+        {
+          "id": "NAkQVL61BRI",
+          "title": "Raga of Revenge (From \"DC\")",
+          "artist": "Anirudh Ravichander"
+        }
+      ],
+      "new_top20": [
+        {
+          "id": "AIClmChJ_wQ",
+          "title": "Mascara Pottu | Video Song | Salim | Vijay Antony | Supriya joshi | மஸ்காரா | சலீம் | Tamil |HD Song",
+          "artist": "Hemachandra • 111M views • 293K likes"
+        },
+        {
+          "id": "RN8stlD-wMc",
+          "title": "Kattu Kattu Video Song | Thirupaachi Tamil Movie | Vijay | Trisha | Devi Sri Prasad | Perarasu",
+          "artist": "Ismail \u0026 Anuradha Paudwal • 33M views • 121K likes"
+        },
+        {
+          "id": "kXUY2xhX_rc",
+          "title": "Salambala (From \"Madharaasi\") (Tamil)",
+          "artist": "Anirudh Ravichander"
+        },
+        {
+          "id": "3wDiqlTNlfQ",
+          "title": "Naa Ready",
+          "artist": "Thalapathy Vijay"
+        },
+        {
+          "id": "gh3FyLT7WVg",
+          "title": "Kurchi Madathapetti",
+          "artist": "Thaman S"
+        },
+        {
+          "id": "zfvgziRZpAM",
+          "title": "Hitu Song",
+          "artist": "M.M.Manasi, M.M.Monisha, Silambarasan TR \u0026 Remya Nambeesan • 26M views • 140K likes"
+        },
+        {
+          "id": "xvT1jH8B9AM",
+          "title": "KALYANI (Remix)",
+          "artist": "ARJN, KDS, FIFTY4 \u0026 Shreya Ghoshal • 307M views • 2.1M likes"
+        },
+        {
+          "id": "eqbV9us6f04",
+          "title": "Selfie Pulla",
+          "artist": "Vijay \u0026 Sunidhi Chauhan • 11M views • 58K likes"
+        },
+        {
+          "id": "sng0VbBxlJk",
+          "title": "Mutta Kalakki (From \"Youth\")",
+          "artist": "G. V. Prakash Kumar"
+        },
+        {
+          "id": "S56FUyB7aAU",
+          "title": "Kalasala Kalasala",
+          "artist": "T. Rajendar, L. R. Eswari \u0026 Solar Sai • 68M views • 324K likes"
+        },
+        {
+          "id": "H0yac30EMTY",
+          "title": "Minnalgal Koothadum (From \"Polladhavan\")",
+          "artist": "Karthik"
+        },
+        {
+          "id": "ijBxe70sd8M",
+          "title": "Achacho",
+          "artist": "Kharesma Ravichandran, Srinisha Jayaseelan \u0026 Hiphop Tamizha • 588M views • 2.4M likes"
+        },
+        {
+          "id": "FkH4uu1qGOA",
+          "title": "Pathikichu (From \"Vidaamuyarchi\")",
+          "artist": "Yogi Sekar"
+        },
+        {
+          "id": "muGu6ObWM14",
+          "title": "Thalapathy Kacheri",
+          "artist": "Anirudh Ravichander"
+        },
+        {
+          "id": "TKV9C7xa8CA",
+          "title": "Bindaas",
+          "artist": "Deepthi Suresh"
+        },
+        {
+          "id": "3kcadMVFolY",
+          "title": "Ma Ma Mahesha",
+          "artist": "Jonita Gandhi, Thaman S \u0026 Sri Krishna • 148M views • 728K likes"
+        },
+        {
+          "id": "iwRpdtPV-1g",
+          "title": "Urugi Urugi (From \"Joe\")",
+          "artist": "Siddhu Kumar"
+        },
+        {
+          "id": "u6-Ihj0ldaI",
+          "title": "O Saki Saki: The Hottest Dance Number | Batla House | Nora Fatehi, Tanishk B, Neha K",
+          "artist": "TurtleVibesOfficial • 2.5M views • 2 hours ago···· • 4.6M views • 10K likes"
+        },
+        {
+          "id": "jxPRbGlXkC0",
+          "title": "Idhuvum Kadandhu Pogum (The Healing Song) (From \"Netrikann\")",
+          "artist": "Sid Sriram"
+        },
+        {
+          "id": "oAVhUAaVCVQ",
+          "title": "Chammak Challo",
+          "artist": "Akon, Vishal-Shekhar \u0026 Hamsika Iyer • 758M views • 4M likes"
+        }
+      ],
+      "new_items_not_in_baseline_top20": 13,
+      "known_overlap": 0
+    },
+    {
+      "seed_id": "2qCpY38ompo",
+      "baseline_count": 30,
+      "radio_count": 49,
+      "cold_radio_ms": 779,
+      "warm_cache_ms": 0,
+      "radio_fetch_calls_for_two_reads": 1,
+      "baseline_top20": [
+        {
+          "id": "sng0VbBxlJk",
+          "title": "Mutta Kalakki (From \"Youth\")",
+          "artist": "G. V. Prakash Kumar"
+        },
+        {
+          "id": "H0yac30EMTY",
+          "title": "Minnalgal Koothadum (From \"Polladhavan\")",
+          "artist": "Karthik"
+        },
+        {
+          "id": "FkH4uu1qGOA",
+          "title": "Pathikichu (From \"Vidaamuyarchi\")",
+          "artist": "Yogi Sekar"
+        },
+        {
+          "id": "TKV9C7xa8CA",
+          "title": "Bindaas",
+          "artist": "Deepthi Suresh"
+        },
+        {
+          "id": "iwRpdtPV-1g",
+          "title": "Urugi Urugi (From \"Joe\")",
+          "artist": "Siddhu Kumar"
+        },
+        {
+          "id": "jxPRbGlXkC0",
+          "title": "Idhuvum Kadandhu Pogum (The Healing Song) (From \"Netrikann\")",
+          "artist": "Sid Sriram"
+        },
+        {
+          "id": "52F9tnKSw4A",
+          "title": "Kannukulla",
+          "artist": "Sai Abhyankkar"
+        },
+        {
+          "id": "m87B0ulgN64",
+          "title": "Beast Mode (From \"Beast\")",
+          "artist": "Anirudh Ravichander"
+        },
+        {
+          "id": "r0VmFe3Ns8I",
+          "title": "Sithira Puthiri (From \"Think Indie\")",
+          "artist": "Sai Abhyankkar"
+        },
+        {
+          "id": "JzU99mOHP0A",
+          "title": "Idhazhin Oram (The Innocence of Love)",
+          "artist": "Anirudh Ravichander"
+        },
+        {
+          "id": "KmQiD0g6lZE",
+          "title": "Oorum Blood (From \"Dude\")",
+          "artist": "Sai Abhyankkar"
+        },
+        {
+          "id": "T4Q4kIuddKk",
+          "title": "Aaja Raja (From \"KH x RK Reunion\")",
+          "artist": "Anirudh Ravichander"
+        },
+        {
+          "id": "lPXl1__XtFI",
+          "title": "Verappa (From \"Karuppu\")",
+          "artist": "Sai Abhyankkar"
+        },
+        {
+          "id": "XJLd1Ooq_c8",
+          "title": "Manasilaayo (From \"Vettaiyan\")",
+          "artist": "Anirudh Ravichander"
+        },
+        {
+          "id": "9Agl2pr9mrk",
+          "title": "Goindhamma (From \"Meesaya Murukku 2\")",
+          "artist": "Hiphop Tamizha"
+        },
+        {
+          "id": "kXUY2xhX_rc",
+          "title": "Salambala (From \"Madharaasi\") (Tamil)",
+          "artist": "Anirudh Ravichander"
+        },
+        {
+          "id": "S5Gfs0beg3Q",
+          "title": "Adangaatha Asuran (From \"Raayan\")",
+          "artist": "A.R. Rahman"
+        },
+        {
+          "id": "me4lu_vyfbg",
+          "title": "Adaavadi (From \"Love Insurance Kompany\")",
+          "artist": "Anirudh Ravichander"
+        },
+        {
+          "id": "qemjcgBJMCE",
+          "title": "God Mode (From \"Karuppu\")",
+          "artist": "Sai Abhyankkar"
+        },
+        {
+          "id": "NAkQVL61BRI",
+          "title": "Raga of Revenge (From \"DC\")",
+          "artist": "Anirudh Ravichander"
+        }
+      ],
+      "new_top20": [
+        {
+          "id": "Qiq9t7ic6j4",
+          "title": "என் பேரு மீனாகுமாரி",
+          "artist": "Krishna Iyer, Viveka \u0026 Malathy Laxman • 52M views • 187K likes"
+        },
+        {
+          "id": "JqFzhcWo3EU",
+          "title": "Yeshanagula",
+          "artist": "Jangi Reddy, Singer Prabha, Anirudh Ravichander \u0026 Kasarla Shyam • 226M views • 950K likes"
+        },
+        {
+          "id": "kXUY2xhX_rc",
+          "title": "Salambala (From \"Madharaasi\") (Tamil)",
+          "artist": "Anirudh Ravichander"
+        },
+        {
+          "id": "AAq06bS8UZM",
+          "title": "Golden Sparrow",
+          "artist": "Wunderbar Films • 186M views • 686K likes"
+        },
+        {
+          "id": "5Yiz05fa_2M",
+          "title": "Naanga Naalu Peru",
+          "artist": "Sai Abhyankkar, Silambarasan TR, Arun Srinivasan \u0026 Asal Kolaar • 24M views • 163K likes"
+        },
+        {
+          "id": "xvT1jH8B9AM",
+          "title": "KALYANI (Remix)",
+          "artist": "ARJN, KDS, FIFTY4 \u0026 Shreya Ghoshal • 307M views • 2.1M likes"
+        },
+        {
+          "id": "5WsUIeNAtbM",
+          "title": "Manasilaayo",
+          "artist": "Malaysia Vasudevan"
+        },
+        {
+          "id": "3C1n5lqGdmY",
+          "title": "Kissik",
+          "artist": "Sublahshini • 138M views • 949K likes"
+        },
+        {
+          "id": "sng0VbBxlJk",
+          "title": "Mutta Kalakki (From \"Youth\")",
+          "artist": "G. V. Prakash Kumar"
+        },
+        {
+          "id": "ijBxe70sd8M",
+          "title": "Achacho",
+          "artist": "Kharesma Ravichandran, Srinisha Jayaseelan \u0026 Hiphop Tamizha • 588M views • 2.4M likes"
+        },
+        {
+          "id": "H0yac30EMTY",
+          "title": "Minnalgal Koothadum (From \"Polladhavan\")",
+          "artist": "Karthik"
+        },
+        {
+          "id": "tOM-nWPcR4U",
+          "title": "Illuminati",
+          "artist": "Dabzee • 461M views • 2.5M likes"
+        },
+        {
+          "id": "FkH4uu1qGOA",
+          "title": "Pathikichu (From \"Vidaamuyarchi\")",
+          "artist": "Yogi Sekar"
+        },
+        {
+          "id": "9OF_cF48mjA",
+          "title": "Raavana Mavandaa",
+          "artist": "Anirudh Ravichander"
+        },
+        {
+          "id": "TKV9C7xa8CA",
+          "title": "Bindaas",
+          "artist": "Deepthi Suresh"
+        },
+        {
+          "id": "8RAd-_Qj_ac",
+          "title": "Peelings",
+          "artist": "Kandukuri Shankar Babu"
+        },
+        {
+          "id": "iwRpdtPV-1g",
+          "title": "Urugi Urugi (From \"Joe\")",
+          "artist": "Siddhu Kumar"
+        },
+        {
+          "id": "dR9B_gPxjkk",
+          "title": "Kiliye Kiliye",
+          "artist": "S. Janaki \u0026 The Independeners • 80M views • 361K likes"
+        },
+        {
+          "id": "jxPRbGlXkC0",
+          "title": "Idhuvum Kadandhu Pogum (The Healing Song) (From \"Netrikann\")",
+          "artist": "Sid Sriram"
+        },
+        {
+          "id": "LIzWTfn5mi4",
+          "title": "K For Kabaradakkam (From \"Guruvayoorambala Nadayil\")",
+          "artist": "Asal Kolaar"
+        }
+      ],
+      "new_items_not_in_baseline_top20": 13,
+      "known_overlap": 0
+    }
+  ]
+}

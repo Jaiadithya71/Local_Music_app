@@ -30,6 +30,18 @@ jobs:
             echo "KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
             echo "KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
           fi
+      - name: Recommendation and persistence regression
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon testDebugUnitTest --tests '*SongSeedPolicyTest' --tests '*RelatedSongCacheTest' --tests '*MusicSearchPolicyTest' --tests '*DiscoveryPolicyTest' --tests '*DiscoveryHomeTest' --tests '*QueueReconnectTest' --tests '*PersistenceTest' --tests '*MixBuilderTest' --tests '*PlaybackCacheTest'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: recommendation-regression
+          path: |
+            android/app/build/test-results/testDebugUnitTest/
+            /home/runner/renders/discovery-home.png
       - name: Build debug APK
         working-directory: android
         run: |

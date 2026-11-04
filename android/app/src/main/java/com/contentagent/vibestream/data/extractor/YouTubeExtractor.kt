@@ -52,6 +52,60 @@ class YouTubeExtractor {
         searchViaMirrors(query, musicOnly)
     }
 
+    /** Anonymous song radio, bounded separately from normal search/playback. */
+    suspend fun relatedSongs(seedId: String): List<Song> = withContext(Dispatchers.IO) {
+        if (!Regex("[A-Za-z0-9_-]{11}").matches(seedId)) return@withContext emptyList()
+        try {
+            val payload = JsonObject().apply {
+                add("context", JsonObject().apply {
+                    add("client", JsonObject().apply {
+                        addProperty("clientName", "WEB_REMIX")
+                        addProperty("clientVersion", "1.20241016.01.00")
+                        addProperty("hl", "en")
+                        addProperty("gl", "IN")
+                    })
+                })
+                addProperty("videoId", seedId)
+                addProperty("playlistId", "RDAMVM$seedId")
+                addProperty("isAudioOnly", true)
+            }
+            val request = Request.Builder()
+                .url("https://music.youtube.com/youtubei/v1/next?prettyPrint=false")
+                .header("User-Agent", "Mozilla/5.0")
+                .header("Origin", "https://music.youtube.com")
+                .post(payload.toString().toRequestBody("application/json".toMediaType())).build()
+            val body = client.newBuilder().callTimeout(8, TimeUnit.SECONDS).build()
+                .newCall(request).execute().use { if (it.isSuccessful) it.body?.string() else null }
+                ?: return@withContext emptyList()
+            parseRadio(body).filter { it.id != seedId }
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (e: Exception) { emptyList() }
+    }
+
+    internal fun parseRadio(body: String): List<Song> {
+        val out = mutableListOf<Song>()
+        fun text(o: com.google.gson.JsonObject?, field: String): String =
+            o?.getAsJsonObject(field)?.getAsJsonArray("runs")?.joinToString("") { it.asJsonObject.get("text")?.asString ?: "" } ?: ""
+        fun visit(x: com.google.gson.JsonElement) {
+            if (x.isJsonArray) x.asJsonArray.forEach { visit(it) }
+            if (!x.isJsonObject) return
+            val obj = x.asJsonObject
+            val row = obj.getAsJsonObject("playlistPanelVideoRenderer")
+            if (row != null) {
+                val id = row.get("videoId")?.takeIf { it.isJsonPrimitive }?.asString.orEmpty()
+                val title = text(row, "title")
+                if (Regex("[A-Za-z0-9_-]{11}").matches(id) && title.isNotBlank()) {
+                    val duration = text(row, "lengthText")
+                    val seconds = duration.split(":").fold(0L) { n, v -> n * 60 + (v.toLongOrNull() ?: 0) }
+                    out.add(Song(id, title, text(row, "longBylineText").ifBlank { text(row, "shortBylineText") }.substringBefore(" • "),
+                        seconds, duration, "https://i.ytimg.com/vi/$id/hqdefault.jpg"))
+                }
+            } else obj.entrySet().forEach { visit(it.value) }
+        }
+        visit(JsonParser.parseString(body))
+        return com.contentagent.vibestream.data.recommendation.MusicSearchPolicy.songsOnly(out).distinctBy { it.id }.take(50)
+    }
+
     /**
      * Primary search: YouTube Music's own search endpoint (songs filter).
      * Public Piped mirrors are frequently down, so this does not depend on them.

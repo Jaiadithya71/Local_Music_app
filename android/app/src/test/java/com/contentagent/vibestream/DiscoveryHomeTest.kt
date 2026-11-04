@@ -29,6 +29,7 @@ class DiscoveryHomeTest {
     @Test fun actualHomeExcludesKnownAndUpdatesQueueAfterPlay() {
         val ctx = ApplicationProvider.getApplicationContext<Context>()
         ctx.getSharedPreferences("vibestream_shelves", 0).edit().clear().commit()
+        com.contentagent.vibestream.ui.screens.clearShelfMemory()
         TasteStore(ctx).save(TasteProfile(listOf("Tamil"), listOf("Chill")))
         val old = Song("old", "Already played", "Fixture artist")
         val liked = Song("liked", "Saved favourite", "Fixture artist")
@@ -39,7 +40,7 @@ class DiscoveryHomeTest {
         compose.setContent {
             VibeStreamTheme {
                 androidx.compose.material3.Surface(color = com.contentagent.vibestream.ui.theme.DarkBackground) {
-                HomeShelves(YouTubeExtractor(), search = { q, _ -> queries.add(q); listOf(old, liked) + fresh },
+                HomeShelves(YouTubeExtractor(), related = { emptyList() }, search = { q, _ -> queries.add(q); listOf(old, liked) + fresh },
                     currentSongId = null, onPlay = { _, q -> queue = q }, onSeeAll = {},
                     recent = listOf(old), liked = listOf(liked), playedKeys = known.value,
                     onPlayMood = { queue = it })
@@ -75,13 +76,14 @@ class DiscoveryHomeTest {
     @Test fun exhaustedHomeShowsNoReplayMix() {
         val ctx = ApplicationProvider.getApplicationContext<Context>()
         ctx.getSharedPreferences("vibestream_shelves", 0).edit().clear().commit()
+        com.contentagent.vibestream.ui.screens.clearShelfMemory()
         TasteStore(ctx).save(TasteProfile(listOf("Japanese")))
         val old = Song("known", "Known fixture", "Fixture artist")
         var queue = emptyList<Song>()
         compose.setContent {
             VibeStreamTheme {
                 androidx.compose.material3.Surface(color = com.contentagent.vibestream.ui.theme.DarkBackground) {
-                    HomeShelves(YouTubeExtractor(), search = { _, _ -> listOf(old) },
+                    HomeShelves(YouTubeExtractor(), related = { emptyList() }, search = { _, _ -> listOf(old) },
                         currentSongId = null, onPlay = { _, q -> queue = q }, onSeeAll = {},
                         recent = listOf(old), playedKeys = DiscoveryPolicy.keys(old), onPlayMood = { queue = it })
                 }
@@ -91,6 +93,76 @@ class DiscoveryHomeTest {
         compose.onNodeWithText("Your mood").assertDoesNotExist()
         compose.onNodeWithText("No new picks yet. Retry or edit your taste.").assertExists()
         compose.runOnIdle { assertTrue(queue.isEmpty()) }
+    }
+
+    @Test fun radioChangesHomeQueueAndKnownFilterStillWins() {
+        val ctx = ApplicationProvider.getApplicationContext<Context>()
+        ctx.getSharedPreferences("vibestream_shelves", 0).edit().clear().commit()
+        com.contentagent.vibestream.ui.screens.clearShelfMemory()
+        ctx.getSharedPreferences("vibestream_radio_v1", 0).edit().clear().commit()
+        TasteStore(ctx).save(TasteProfile(listOf("Tamil")))
+        val seed = Song("abcdefghijk", "Liked seed", "Singer")
+        val related = Song("lllllllllll", "English titled Tamil song", "Another singer")
+        var queue = emptyList<Song>()
+        compose.setContent {
+            VibeStreamTheme {
+                HomeShelves(YouTubeExtractor(), search = { _, _ -> listOf(Song("sssssssssss", "Search discovery", "Third singer")) },
+                    related = { listOf(seed, related, Song("ppppppppppp", "Podcast", "Talk")) },
+                    currentSongId = null, onPlay = { _, q -> queue = q }, onSeeAll = {},
+                    liked = listOf(seed), onPlayMood = { queue = it })
+            }
+        }
+        compose.waitForIdle()
+        compose.onNodeWithText("Your mood").performClick()
+        compose.runOnIdle {
+            assertTrue(queue.any { it.id == related.id })
+            assertTrue(queue.any { it.id == "sssssssssss" })
+            assertFalse(queue.any { it.id == seed.id || it.id == "ppppppppppp" })
+        }
+    }
+
+    @Test fun warmHomeUsesSavedPoolsAndClearPreservesLibrary() {
+        val ctx = ApplicationProvider.getApplicationContext<Context>()
+        ctx.getSharedPreferences("vibestream_shelves", 0).edit().clear().commit()
+        com.contentagent.vibestream.ui.screens.clearShelfMemory()
+        ctx.getSharedPreferences("vibestream_radio_v1", 0).edit().clear().commit()
+        TasteStore(ctx).save(TasteProfile(listOf("Tamil")))
+        val liked = Song("abcdefghijk", "Saved song", "Artist")
+        val library = com.contentagent.vibestream.data.local.LibraryStore(ctx)
+        if (!library.isLiked(liked.id)) library.toggleLike(liked)
+        library.recordPlayed(liked)
+        val pool = (1..12).map { Song("cache$it", "Cached song $it", "Artist $it") }
+        val key = "discovery-v4|M|Tamil new releases"
+        ctx.getSharedPreferences("vibestream_shelves", 0).edit()
+            .putString(key, com.google.gson.Gson().toJson(pool)).putLong("t:$key", System.currentTimeMillis()).commit()
+        var cachedQueryFetched = false
+        compose.setContent {
+            VibeStreamTheme {
+                HomeShelves(YouTubeExtractor(), search = { q, _ -> if (q == "Tamil new releases") cachedQueryFetched = true; pool },
+                    related = { emptyList() }, currentSongId = null, onPlay = { _, _ -> }, onSeeAll = {})
+            }
+        }
+        compose.waitForIdle()
+        compose.onNodeWithText("Your mood").assertExists()
+        compose.runOnIdle { assertFalse(cachedQueryFetched) }
+        compose.onNodeWithText("Loading cache").performClick()
+        compose.onNodeWithText("Clear loading cache?").assertExists()
+        compose.runOnIdle {
+            val global = Class.forName("android.view.WindowManagerGlobal").getMethod("getInstance").invoke(null)
+            val field = global.javaClass.getDeclaredField("mViews").apply { isAccessible = true }
+            val view = (field.get(global) as List<android.view.View>).last()
+            val bitmap = android.graphics.Bitmap.createBitmap(view.width, view.height, android.graphics.Bitmap.Config.ARGB_8888)
+            view.draw(android.graphics.Canvas(bitmap))
+            val file = File(System.getProperty("user.home"), "renders/loading-cache.png")
+            file.parentFile?.mkdirs()
+            file.outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        }
+        compose.onNodeWithText("Clear cache").performClick()
+        compose.waitForIdle()
+        compose.runOnIdle {
+            assertTrue(com.contentagent.vibestream.data.local.LibraryStore(ctx).isLiked(liked.id))
+            assertTrue(com.contentagent.vibestream.data.local.LibraryStore(ctx).playedKeys.value.contains("id:${liked.id}"))
+        }
     }
 
 }

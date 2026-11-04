@@ -24,6 +24,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import com.contentagent.vibestream.data.extractor.YouTubeExtractor
 import com.contentagent.vibestream.data.model.Song
 import com.contentagent.vibestream.data.recommendation.DiscoveryPolicy
@@ -50,6 +52,11 @@ private object ShelfCache {
     var restored = false
 }
 
+internal fun clearShelfMemory() {
+    ShelfCache.data.clear(); ShelfCache.pool.clear(); ShelfCache.seen.clear(); ShelfCache.drift.clear()
+    ShelfCache.failed.clear(); ShelfCache.loadingMore.clear()
+}
+
 /** Liked artists float up, artists skipped twice or more sink. Stable within a group. */
 private fun rankForTaste(items: List<Song>, likedArtists: Set<String>, skippedArtists: Set<String>): List<Song> {
     return items.sortedBy {
@@ -64,7 +71,7 @@ private fun rankForTaste(items: List<Song>, likedArtists: Set<String>, skippedAr
 private fun shelfPrefs(ctx: android.content.Context) =
     ctx.getSharedPreferences("vibestream_shelves", android.content.Context.MODE_PRIVATE)
 
-private fun cacheKey(query: String, musicOnly: Boolean) = "discovery-v3|" + (if (musicOnly) "M|" else "A|") + query
+private fun cacheKey(query: String, musicOnly: Boolean) = "discovery-v4|" + (if (musicOnly) "M|" else "A|") + query
 
 private fun restoreShelves(ctx: android.content.Context, queries: List<String>, musicOnly: Boolean) {
     val gson = com.google.gson.Gson()
@@ -79,9 +86,12 @@ private fun restoreShelves(ctx: android.content.Context, queries: List<String>, 
 }
 
 /** Fetches a shelf, keeps showing cached songs if the refresh fails. */
-private suspend fun loadShelf(ctx: android.content.Context, search: suspend (String, Boolean) -> List<Song>, query: String, musicOnly: Boolean) {
+private suspend fun loadShelf(ctx: android.content.Context, search: suspend (String, Boolean) -> List<Song>, query: String, musicOnly: Boolean, force: Boolean = false) {
     val k = cacheKey(query, musicOnly)
     ShelfCache.failed.remove(k)
+    val now = System.currentTimeMillis()
+    if (!force && ShelfCache.data[k]?.isNotEmpty() == true &&
+        now - shelfPrefs(ctx).getLong("t:$k", 0) in 0 until 21_600_000L) return
     var result: List<Song> = emptyList()
     for (attempt in 1..2) {
         result = try {
@@ -96,7 +106,11 @@ private suspend fun loadShelf(ctx: android.content.Context, search: suspend (Str
         val window = rankForTaste(clean.filter { it.id !in seenSet }, likedArtistsProvider(), skippedArtistsProvider()).take(12)
         seenSet.addAll(window.map { it.id })
         ShelfCache.data[k] = clean
-        shelfPrefs(ctx).edit().putString(k, com.google.gson.Gson().toJson(clean)).apply()
+        val edit = shelfPrefs(ctx).edit()
+        val oldKeys = shelfPrefs(ctx).all.keys.filter { it.startsWith("discovery-") && it != k }
+            .sortedByDescending { shelfPrefs(ctx).getLong("t:$it", 0) }
+        oldKeys.drop(63).forEach { edit.remove(it).remove("t:$it"); ShelfCache.data.remove(it); ShelfCache.pool.remove(it); ShelfCache.seen.remove(it); ShelfCache.drift.remove(it) }
+        edit.putString(k, com.google.gson.Gson().toJson(clean)).putLong("t:$k", now).apply()
     } else if (ShelfCache.data[k] == null) {
         ShelfCache.failed[k] = true
     }
@@ -154,6 +168,7 @@ private suspend fun showMore(ctx: android.content.Context, search: suspend (Stri
 fun HomeShelves(
     extractor: YouTubeExtractor,
     search: suspend (String, Boolean) -> List<Song> = { q, m -> extractor.searchSongs(q, m) },
+    related: suspend (String) -> List<Song> = { extractor.relatedSongs(it) },
     currentSongId: String?,
     onPlay: (Song, List<Song>) -> Unit,
     onSeeAll: (String) -> Unit,
@@ -184,20 +199,36 @@ fun HomeShelves(
     }
     var discoveryRound by remember { mutableStateOf(shelfPrefs(ctx).getInt("discovery_round", 0) + 1) }
     var refreshing by remember { mutableStateOf(false) }
+    var forceRefresh by remember { mutableStateOf(false) }
+    var cacheDialog by remember { mutableStateOf(false) }
+    var cacheEpoch by remember { mutableStateOf(0) }
     val known = playedKeys + (recent + liked + playlists.flatMap { it.songs }).flatMap { DiscoveryPolicy.keys(it) }
     val seedQueries = DiscoveryPolicy.queries(profile.languages, profile.moods, profile.artists, discoveryRound)
     val seedSongs = seedQueries.flatMap { ShelfCache.data[cacheKey(it, musicOnly)] ?: emptyList() }
-    val discoveryPool = shelfList.flatMap { ShelfCache.data[cacheKey(it.second, musicOnly)] ?: emptyList() } + seedSongs
+    val radioCache = remember { com.contentagent.vibestream.data.recommendation.RelatedSongCache(ctx) }
+    var radioSongs by remember { mutableStateOf(emptyList<Song>()) }
+    val radioSeeds = com.contentagent.vibestream.data.recommendation.SongSeedPolicy.seeds(liked, playlists.flatMap { it.songs }, discoveryRound)
+    val keywordPool = shelfList.flatMap { ShelfCache.data[cacheKey(it.second, musicOnly)] ?: emptyList() } + seedSongs
+    val discoveryPool = com.contentagent.vibestream.data.recommendation.SongSeedPolicy.blend(radioSongs, keywordPool, profile.languages)
     val moodMix = DiscoveryPolicy.fresh(discoveryPool, known, skippedArtists, musicOnly = musicOnly)
     // Show cached shelves instantly, then refresh one at a time in the background.
-    LaunchedEffect(shelfList, musicOnly, discoveryRound) {
+    LaunchedEffect(shelfList, musicOnly, discoveryRound, radioSeeds.map { it.id }, cacheEpoch) {
         refreshing = true
         shelfPrefs(ctx).edit().putInt("discovery_round", discoveryRound).apply()
         try {
-            restoreShelves(ctx, shelfList.map { it.second }, musicOnly)
+            restoreShelves(ctx, (seedQueries + shelfList.map { it.second }).distinct(), musicOnly)
+            // Radio requests run together, at most three, each capped at eight seconds.
+            // Keyword loading proceeds independently so a radio outage cannot block Home.
+            radioSongs = emptyList()
+            kotlinx.coroutines.coroutineScope {
+                launch {
+                    radioSongs = radioSeeds.map { seed ->
+                        async { radioCache.get(seed.id, related) }
+                    }.awaitAll().flatten().distinctBy { it.id }
+                }
             // Different taste-scoped queries refill the pool, not exact played titles.
             for (q in (seedQueries + shelfList.map { it.second }).distinct()) {
-                loadShelf(ctx, search, q, musicOnly)
+                loadShelf(ctx, search, q, musicOnly, force = forceRefresh)
             }
             // A depleted first batch gets one bounded automatic expansion. Never
             // substitute history on a catalog outage or after exhaustion.
@@ -205,13 +236,34 @@ fun HomeShelves(
             if (DiscoveryPolicy.fresh(pool, known, musicOnly = musicOnly).size < 8) {
                 val extra = DiscoveryPolicy.queries(profile.languages, profile.moods, profile.artists, discoveryRound + 1)
                 for (q in extra.filter { it !in seedQueries }) {
-                    loadShelf(ctx, search, q, musicOnly)
+                    loadShelf(ctx, search, q, musicOnly, force = forceRefresh)
                     val additions = ShelfCache.data[cacheKey(q, musicOnly)] ?: emptyList()
                     val key = cacheKey(shelfList.first().second, musicOnly)
                     ShelfCache.data[key] = ((ShelfCache.data[key] ?: emptyList()) + additions).distinctBy { it.id }
                 }
             }
-        } finally { refreshing = false }
+            }
+        } finally { refreshing = false; forceRefresh = false }
+    }
+    if (cacheDialog) {
+        androidx.compose.material3.AlertDialog(onDismissRequest = { cacheDialog = false },
+            title = { Text("Clear loading cache?") },
+            text = { Text("Removes saved Home picks, artwork and disposable streamed audio. Artwork cache is capped at 256 MB and streamed audio at 512 MB; Home stores up to 64 search pools and 64 radio pools. Downloads, likes, playlists and played history stay untouched. New artwork and picks will need the network again.") },
+            confirmButton = { androidx.compose.material3.TextButton(onClick = {
+                scope.launch {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        coil.Coil.imageLoader(ctx).diskCache?.clear()
+                        com.contentagent.vibestream.player.PlaybackCache.clear(ctx)
+                        ctx.getSharedPreferences("vibestream_radio_v1", 0).edit().clear().commit()
+                        shelfPrefs(ctx).edit().clear().commit()
+                    }
+                    coil.Coil.imageLoader(ctx).memoryCache?.clear()
+                    clearShelfMemory()
+                    radioSongs = emptyList(); cacheEpoch++; discoveryRound++; forceRefresh = true
+                    cacheDialog = false
+                }
+            }) { Text("Clear cache") } },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { cacheDialog = false }) { Text("Keep cache") } })
     }
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
         item {
@@ -276,12 +328,16 @@ fun HomeShelves(
                 onRefresh = {
                     if (!refreshing) {
                         refreshing = true
+                        forceRefresh = true
                         discoveryRound++
                         shelfPrefs(ctx).edit().putInt("discovery_round", discoveryRound).apply()
                     }
                 },
                 onEditTaste = onEditTaste
             )
+            androidx.compose.material3.TextButton(enabled = !refreshing, onClick = { cacheDialog = true }, modifier = Modifier.padding(horizontal = 8.dp)) {
+                Text("Loading cache", color = TextSecondary, fontSize = 12.sp)
+            }
         }
         if (namedMixes.isNotEmpty()) {
             item {
@@ -367,7 +423,9 @@ fun HomeShelves(
             }
         }
         items(shelfList) { (title, query) ->
-            val songs = ShelfCache.data[cacheKey(query, musicOnly)]?.let { DiscoveryPolicy.fresh(it, known, skippedArtists, limit = it.size, musicOnly = musicOnly) }
+            val base = if (query == shelfList.first().second) discoveryPool.takeIf { it.isNotEmpty() }
+                else ShelfCache.data[cacheKey(query, musicOnly)]
+            val songs = base?.let { DiscoveryPolicy.fresh(it, known, skippedArtists, limit = it.size, musicOnly = musicOnly) }
             val failed = ShelfCache.failed[cacheKey(query, musicOnly)] == true
             Column(modifier = Modifier.padding(top = 16.dp)) {
                 Text(

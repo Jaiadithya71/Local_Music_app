@@ -46,6 +46,8 @@ class PlaybackService : MediaSessionService() {
         // Ephemeral local-only diagnostics; no URLs, account identifiers or history.
         @Volatile var audioFormatSummary: String = "Not playing"
         @Volatile var audioUnderruns: Int = 0
+        @Volatile var rebufferCount: Int = 0
+        @Volatile var bufferedAheadMs: Long = 0
 
         private const val CMD_LIKE = "com.contentagent.vibestream.LIKE"
         private const val CMD_SHUFFLE = "com.contentagent.vibestream.SHUFFLE"
@@ -139,7 +141,7 @@ class PlaybackService : MediaSessionService() {
             .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MUSIC)
             .build()
         val exo = ExoPlayer.Builder(this)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(factory))
+            .setMediaSourceFactory(DefaultMediaSourceFactory(PlaybackCache.factory(this, factory)))
             .setAudioAttributes(audioAttrs, /* handleAudioFocus= */ true)
             .setHandleAudioBecomingNoisy(true)
             .build()
@@ -163,6 +165,12 @@ class PlaybackService : MediaSessionService() {
         })
         audioSessionId = exo.audioSessionId
         exo.addListener(object : Player.Listener {
+            private var played = false
+            override fun onIsPlayingChanged(isPlaying: Boolean) { if (isPlaying) played = true }
+            override fun onPlaybackStateChanged(state: Int) {
+                if (state == Player.STATE_BUFFERING && played) rebufferCount++
+                bufferedAheadMs = (exo.bufferedPosition - exo.currentPosition).coerceAtLeast(0)
+            }
             override fun onMediaItemTransition(item: androidx.media3.common.MediaItem?, reason: Int) {
                 if (item != null && item.mediaId.isNotBlank()) {
                     // The service owns background transitions. Do not depend on a

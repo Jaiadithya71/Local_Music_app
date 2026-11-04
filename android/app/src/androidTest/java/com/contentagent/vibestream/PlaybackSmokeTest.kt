@@ -144,4 +144,63 @@ class PlaybackSmokeTest {
             File(second.localFilePath!!).delete()
         }
     }
+    @Test fun interruptedHttpResumesAndCachedReplayWorksWithServerOffline() {
+        context.getSharedPreferences("vibestream_taste", 0).edit().putBoolean("done", true).commit()
+        com.contentagent.vibestream.player.PlaybackCache.clear(context)
+        val fixture = tone("network-fixture", 440.0)
+        val bytes = File(fixture.localFilePath!!).readBytes()
+        val server = java.net.ServerSocket(0, 10, java.net.InetAddress.getByName("127.0.0.1"))
+        val requests = java.util.concurrent.atomic.AtomicInteger()
+        val interrupted = java.util.concurrent.atomic.AtomicBoolean(false)
+        val worker = Thread {
+            while (!server.isClosed) try {
+                val socket = server.accept()
+                socket.use { conn ->
+                    val reader = conn.getInputStream().bufferedReader()
+                    var line = reader.readLine(); var start = 0
+                    while (!line.isNullOrEmpty()) {
+                        if (line.startsWith("Range:", true)) start = line.substringAfter("bytes=").substringBefore('-').trim().toIntOrNull() ?: 0
+                        line = reader.readLine()
+                    }
+                    val request = requests.incrementAndGet()
+                    val out = conn.getOutputStream()
+                    val header = if (start > 0) "HTTP/1.1 206 Partial Content\r\nContent-Range: bytes $start-${bytes.size-1}/${bytes.size}\r\n" else "HTTP/1.1 200 OK\r\n"
+                    out.write((header + "Content-Type: audio/wav\r\nContent-Length: ${bytes.size-start}\r\nAccept-Ranges: bytes\r\nConnection: close\r\n\r\n").toByteArray())
+                    val end = if (request == 1) bytes.size / 2 else bytes.size
+                    var offset = start
+                    while (offset < end) {
+                        val n = minOf(16_384, end-offset); out.write(bytes, offset, n); out.flush(); offset += n
+                        Thread.sleep(if (offset % 65536 == 0) 80 else 5)
+                    }
+                    if (request == 1) interrupted.set(true)
+                }
+            } catch (_: Exception) { }
+        }.apply { isDaemon = true; start() }
+        val scenario = ActivityScenario.launch(MainActivity::class.java)
+        lateinit var controller: MusicPlayerController
+        try {
+            onMain { controller = MusicPlayerController(context, YouTubeExtractor()) }
+            val song = fixture.copy(id = "network-test", isDownloaded = false, localFilePath = null,
+                streamUrl = "http://127.0.0.1:${server.localPort}/fixture.wav")
+            onMain { controller.playSong(song) }
+            await("interrupted stream starts", 25000) { controller.isPlaying.value }
+            await("fixture delivery interrupted", 25000) { interrupted.get() }
+            await("interrupted stream recovers and advances", 25000) { controller.currentPosition.value >= 6000 }
+            assertNull(controller.errorMessage.value)
+            assertTrue("upstream had a range retry", requests.get() >= 2)
+            val before = requests.get()
+            server.close(); worker.join(2000)
+            onMain { controller.playSong(song) }
+            await("cached stream plays with server offline", 15000) { controller.isPlaying.value && controller.currentPosition.value >= 1000 }
+            assertEquals(before, requests.get())
+            assertNull(controller.errorMessage.value)
+            android.util.Log.i("PlaybackBenchmark", "Interrupted HTTP recovered; offline cache replay passed; upstream requests=$before")
+        } finally {
+            server.close(); worker.join(2000)
+            onMain { controller.release() }; scenario.close()
+            context.stopService(Intent(context, PlaybackService::class.java))
+            File(fixture.localFilePath!!).delete()
+        }
+    }
+
 }

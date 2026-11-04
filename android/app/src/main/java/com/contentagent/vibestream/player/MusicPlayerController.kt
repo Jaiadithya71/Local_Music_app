@@ -318,6 +318,7 @@ class MusicPlayerController(
                     _queueIndex.value = idx
                     _currentSong.value = q[idx]
                     if (old != idx) {
+                        recoveryAttempts = 0
                         pendingCandidates.clear()
                         prefetchAlts.remove(q[idx].id)?.let { pendingCandidates.addAll(it) }
                     }
@@ -343,16 +344,28 @@ class MusicPlayerController(
                 if (pendingCandidates.isEmpty() && song0 != null) {
                     prefetchAlts.remove(song0.id)?.let { pendingCandidates.addAll(it) }
                 }
-                val next = pendingCandidates.removeFirstOrNull()
                 val song = song0
-                if (next != null && song != null) {
+                val resumeMs = controller?.currentPosition?.coerceAtLeast(0) ?: _currentPosition.value
+                val wasRequestedToPlay = controller?.playWhenReady == true
+                val next = pendingCandidates.removeFirstOrNull()
+                if (song != null && recoveryAttempts < 5 && (next != null || recoveryAttempts < 1)) {
+                    recoveryAttempts++
                     lastPlayError = describe(error)
+                    playbackGeneration++
+                    val generation = playbackGeneration
                     playerScope.launch {
+                        val url = next ?: extractor.resolveAudioCandidates(song.id).firstOrNull()
+                        if (generation != playbackGeneration || _currentSong.value?.id != song.id) return@launch
+                        if (url == null) {
+                            _isBuffering.value = false
+                            _errorMessage.value = "Could not refresh audio stream. Retry playback."
+                            return@launch
+                        }
                         controller?.let { c ->
-                            playbackGeneration++
-                            c.setMediaItem(buildItem(song, Uri.parse(next)))
+                            song.streamUrl = url
+                            c.setMediaItem(buildItem(song, Uri.parse(url)), resumeMs)
                             c.prepare()
-                            c.play()
+                            c.playWhenReady = wasRequestedToPlay
                             scheduleNextPrefetch()
                         }
                     }
@@ -421,6 +434,7 @@ class MusicPlayerController(
     // Bumped on every fresh playback start; a stale prefetch job checks it before
     // touching the player so it can never append an out-of-date track.
     private var playbackGeneration = 0
+    private var recoveryAttempts = 0
     private var prefetchJob: Job? = null
     // Alternate stream URLs per song id, kept for the onPlayerError fallback when a
     // prefetched item turns out to be a dead link at play time.
@@ -506,6 +520,7 @@ class MusicPlayerController(
     }
 
     private fun startPlayback(song: Song) {
+        recoveryAttempts = 0
         playbackGeneration++
         val generation = playbackGeneration
         prefetchJob?.cancel()
