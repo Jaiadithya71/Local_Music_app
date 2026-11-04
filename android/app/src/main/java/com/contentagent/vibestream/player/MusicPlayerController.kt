@@ -347,6 +347,7 @@ class MusicPlayerController(
                 val song = song0
                 val resumeMs = controller?.currentPosition?.coerceAtLeast(0) ?: _currentPosition.value
                 val wasRequestedToPlay = controller?.playWhenReady == true
+                prefetchJob?.cancel()
                 val next = pendingCandidates.removeFirstOrNull()
                 if (song != null && recoveryAttempts < 5 && (next != null || recoveryAttempts < 1)) {
                     recoveryAttempts++

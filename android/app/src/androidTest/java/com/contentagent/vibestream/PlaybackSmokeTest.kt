@@ -203,4 +203,28 @@ class PlaybackSmokeTest {
         }
     }
 
+    @Test fun backupStreamRecoveryKeepsPosition() {
+        context.getSharedPreferences("vibestream_taste", 0).edit().putBoolean("done", true).commit()
+        val scenario = ActivityScenario.launch(MainActivity::class.java)
+        val fixture = tone("recovery-fixture", 440.0)
+        lateinit var controller: MusicPlayerController
+        try {
+            onMain { controller = MusicPlayerController(context, YouTubeExtractor()) }
+            onMain { controller.playSong(fixture) }
+            await("recovery fixture is playing") { controller.isPlaying.value && controller.currentPosition.value >= 2000 }
+            onMain {
+                val candidates = controller.javaClass.getDeclaredField("pendingCandidates").apply { isAccessible = true }.get(controller) as kotlin.collections.ArrayDeque<String>
+                candidates.add("file://${fixture.localFilePath}")
+                val listener = controller.javaClass.getDeclaredField("listener").apply { isAccessible = true }.get(controller) as androidx.media3.common.Player.Listener
+                listener.onPlayerError(androidx.media3.common.PlaybackException("injected upstream failure", null, androidx.media3.common.PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED))
+            }
+            await("backup recovery playing without restart") { controller.isPlaying.value && controller.currentPosition.value >= 2500 }
+            assertNull(controller.errorMessage.value)
+            android.util.Log.i("PlaybackBenchmark", "Backup recovery preserved nonzero position")
+        } finally {
+            onMain { controller.release() }; scenario.close()
+            context.stopService(Intent(context, PlaybackService::class.java)); File(fixture.localFilePath!!).delete()
+        }
+    }
+
 }

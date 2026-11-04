@@ -49,6 +49,8 @@ class PlaybackCacheTest {
         assertArrayEquals(bytes, read(factory)); assertEquals(1, opens)
         assertArrayEquals(bytes, read(factory))
         assertEquals(1, opens)
+        assertTrue(PlaybackCache.get(ctx).cacheSpace > 0)
         PlaybackCache.clear(ctx)
+        assertEquals(0L, PlaybackCache.get(ctx).cacheSpace)
     }
 }
