@@ -146,7 +146,9 @@ class LibraryStore(context: Context) {
                     for (s in pl.songs) if (songs.none { it.id == s.id }) songs.add(clean(s))
                     merged[i] = existing.copy(songs = songs)
                 } else {
-                    merged.add(Playlist(pl.name, pl.songs.map { clean(it) }))
+                    // One row per song id: duplicates would break the playlist
+                    // list's stable keys and double the song on screen.
+                    merged.add(Playlist(pl.name, pl.songs.map { clean(it) }.distinctBy { it.id }))
                 }
             }
             _playlists.value = merged

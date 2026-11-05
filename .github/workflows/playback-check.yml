@@ -22,7 +22,7 @@ jobs:
           sudo udevadm trigger --name-match=kvm
       - name: Logic regression
         working-directory: android
-        run: ./gradlew --no-daemon testDebugUnitTest --tests '*QueueReconnectTest' --tests '*MixBuilderTest' --tests '*PersistenceTest' --tests '*MusicSearchPolicyTest' --tests '*DiscoveryPolicyTest' --tests '*DiscoveryPersistenceTest' --tests '*DiscoveryHomeTest' --tests '*SongSeedPolicyTest' --tests '*RelatedSongCacheTest' --tests '*PlaybackCacheTest'
+        run: ./gradlew --no-daemon testDebugUnitTest --tests '*QueueReconnectTest' --tests '*MixBuilderTest' --tests '*PersistenceTest' --tests '*MusicSearchPolicyTest' --tests '*DiscoveryPolicyTest' --tests '*DiscoveryPersistenceTest' --tests '*DiscoveryHomeTest' --tests '*SongSeedPolicyTest' --tests '*RelatedSongCacheTest' --tests '*PlaybackCacheTest' --tests '*SlowRadioHomeTest' --tests '*BackupImportSeedsTest'
       - name: Collect actual Home render
         run: |
           mkdir -p playback-evidence

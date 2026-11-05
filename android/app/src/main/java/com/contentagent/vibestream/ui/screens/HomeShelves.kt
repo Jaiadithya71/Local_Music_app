@@ -215,24 +215,29 @@ fun HomeShelves(
     LaunchedEffect(shelfList, musicOnly, discoveryRound, radioSeeds.map { it.id }, cacheEpoch) {
         refreshing = true
         shelfPrefs(ctx).edit().putInt("discovery_round", discoveryRound).apply()
+        // Radio (related-track) loading is fully independent of keyword shelves:
+        // it runs as its own child and never holds the section in "Finding..."
+        // or disables New picks. Last good radio picks stay until replaced.
+        launch {
+            val fetched = kotlinx.coroutines.coroutineScope {
+                radioSeeds.map { seed -> async { radioCache.get(seed.id, related) } }.awaitAll()
+            }.flatten().distinctBy { it.id }
+            if (fetched.isNotEmpty()) radioSongs = fetched
+        }
         try {
             restoreShelves(ctx, (seedQueries + shelfList.map { it.second }).distinct(), musicOnly)
-            // Radio requests run together, at most three, each capped at eight seconds.
-            // Keyword loading proceeds independently so a radio outage cannot block Home.
-            radioSongs = emptyList()
-            kotlinx.coroutines.coroutineScope {
-                launch {
-                    radioSongs = radioSeeds.map { seed ->
-                        async { radioCache.get(seed.id, related) }
-                    }.awaitAll().flatten().distinctBy { it.id }
-                }
             // Different taste-scoped queries refill the pool, not exact played titles.
-            for (q in (seedQueries + shelfList.map { it.second }).distinct()) {
-                loadShelf(ctx, search, q, musicOnly, force = forceRefresh)
+            // Batches of three: one slow query must not serialize Home, but a
+            // mobile-data connection is not flooded either.
+            val queries = (seedQueries + shelfList.map { it.second }).distinct()
+            for (batch in queries.chunked(3)) {
+                kotlinx.coroutines.coroutineScope {
+                    batch.map { q -> async { loadShelf(ctx, search, q, musicOnly, force = forceRefresh) } }.awaitAll()
+                }
             }
             // A depleted first batch gets one bounded automatic expansion. Never
             // substitute history on a catalog outage or after exhaustion.
-            val pool = (seedQueries + shelfList.map { it.second }).flatMap { ShelfCache.data[cacheKey(it, musicOnly)] ?: emptyList() }
+            val pool = queries.flatMap { ShelfCache.data[cacheKey(it, musicOnly)] ?: emptyList() }
             if (DiscoveryPolicy.fresh(pool, known, musicOnly = musicOnly).size < 8) {
                 val extra = DiscoveryPolicy.queries(profile.languages, profile.moods, profile.artists, discoveryRound + 1)
                 for (q in extra.filter { it !in seedQueries }) {
@@ -241,7 +246,6 @@ fun HomeShelves(
                     val key = cacheKey(shelfList.first().second, musicOnly)
                     ShelfCache.data[key] = ((ShelfCache.data[key] ?: emptyList()) + additions).distinctBy { it.id }
                 }
-            }
             }
         } finally { refreshing = false; forceRefresh = false }
     }
