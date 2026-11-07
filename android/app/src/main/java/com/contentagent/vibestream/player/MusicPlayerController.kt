@@ -100,14 +100,14 @@ class MusicPlayerController(
             while (isActive) {
                 val remaining = endAt - System.currentTimeMillis()
                 if (remaining <= 0) break
-                if (remaining <= AppVolumeGain.FADE_WINDOW_MS) {
-                    controller?.volume = AppVolumeGain.effectiveGain(_appVolume.value, remaining)
+                if (remaining <= 15_000L) {
+                    controller?.volume = (remaining / 15_000f).coerceIn(0f, 1f)
                 }
                 delay(250)
             }
             controller?.pause()
+            controller?.volume = 1f
             _sleepEndAtMs.value = null
-            applyVolume()
         }
     }
 
@@ -121,39 +121,55 @@ class MusicPlayerController(
         sleepJob = null
         _sleepEndAtMs.value = null
         _sleepEndOfTrack.value = false
-        applyVolume()
+        controller?.volume = 1f
     }
 
-    // ---- App volume (the app's own output gain) ----
-    // ExoPlayer's per-player gain scales the audio samples before they reach any
-    // output, so it always changes what a Bluetooth device plays - even when the
-    // connected device ignores the phone's "absolute volume" link and the phone's
-    // volume keys appear to do nothing. Persisted; the sleep-timer fade
-    // multiplies this base level instead of replacing it.
-    private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-    private val _appVolume = MutableStateFlow(prefs.getFloat(KEY_APP_VOLUME, 1f).coerceIn(0f, 1f))
-    val appVolume: StateFlow<Float> = _appVolume.asStateFlow()
+    // ---- Device volume (synced with the phone's media volume) ----
+    // The in-app slider is the same Android media-stream volume the hardware
+    // buttons and the system panel drive: buttons move the slider, the slider
+    // moves the buttons' volume, and over a Bluetooth link that honors volume
+    // events this is the volume the connected device gets. No separate app-only
+    // level, so nothing can silently drift or hide an attenuation.
+    private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+    private val _deviceVolume = MutableStateFlow(0)
+    val deviceVolume: StateFlow<Int> = _deviceVolume.asStateFlow()
+    private val _maxDeviceVolume = MutableStateFlow(1)
+    val maxDeviceVolume: StateFlow<Int> = _maxDeviceVolume.asStateFlow()
 
-    private fun applyVolume() {
-        val fadeRemaining = _sleepEndAtMs.value?.let { end ->
-            (end - System.currentTimeMillis()).takeIf { it in 0 until AppVolumeGain.FADE_WINDOW_MS }
+    private fun refreshDeviceVolume() {
+        val c = controller ?: return
+        _maxDeviceVolume.value = audioManager.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+        if (c.isCommandAvailable(Player.COMMAND_GET_DEVICE_VOLUME)) {
+            _deviceVolume.value = c.deviceVolume
         }
-        controller?.volume = AppVolumeGain.effectiveGain(_appVolume.value, fadeRemaining)
     }
 
-    fun setAppVolume(volume: Float) {
-        val v = volume.coerceIn(0f, 1f)
-        _appVolume.value = v
-        prefs.edit().putFloat(KEY_APP_VOLUME, v).apply()
-        applyVolume()
+    fun setDeviceVolumeFraction(fraction: Float) {
+        val c = controller ?: return
+        if (!c.isCommandAvailable(Player.COMMAND_SET_DEVICE_VOLUME)) return
+        val target = DeviceVolume.volumeForFraction(fraction, _maxDeviceVolume.value)
+        // No UI flag: the app slider is already the visible feedback, and a
+        // system panel popping on every drag tick would fight it.
+        c.setDeviceVolume(target, 0)
+        _deviceVolume.value = target
     }
 
-    fun volumeUp() = setAppVolume(_appVolume.value + 0.1f)
-    fun volumeDown() = setAppVolume(_appVolume.value - 0.1f)
+    fun volumeUp() {
+        val c = controller ?: return
+        if (c.isCommandAvailable(Player.COMMAND_ADJUST_DEVICE_VOLUME)) {
+            c.increaseDeviceVolume(0)
+        } else {
+            setDeviceVolumeFraction(DeviceVolume.sliderFraction(_deviceVolume.value + 1, _maxDeviceVolume.value))
+        }
+    }
 
-    private companion object {
-        const val PREFS_NAME = "vibestream_player"
-        const val KEY_APP_VOLUME = "app_volume"
+    fun volumeDown() {
+        val c = controller ?: return
+        if (c.isCommandAvailable(Player.COMMAND_ADJUST_DEVICE_VOLUME)) {
+            c.decreaseDeviceVolume(0)
+        } else {
+            setDeviceVolumeFraction(DeviceVolume.sliderFraction(_deviceVolume.value - 1, _maxDeviceVolume.value))
+        }
     }
 
     // ---- Queue persistence ----
@@ -303,6 +319,10 @@ class MusicPlayerController(
     }
 
     private val listener = object : Player.Listener {
+            override fun onDeviceVolumeChanged(volume: Int, muted: Boolean) {
+                _deviceVolume.value = volume
+            }
+
             override fun onIsPlayingChanged(playing: Boolean) {
                 _isPlaying.value = playing
                 if (playing) {
@@ -419,7 +439,12 @@ class MusicPlayerController(
                 // A selection made while the connection was pending wins.
                 if (_queue.value.isEmpty()) restoreQueueFor(connected.currentMediaItem)
                 connected.addListener(listener)
-                applyVolume()
+                // A previous build's per-player gain must not linger as a hidden
+                // attenuation; an active sleep fade rewrites this every 250ms.
+                connected.volume = 1f
+                context.getSharedPreferences("vibestream_player", Context.MODE_PRIVATE)
+                    .edit().remove("app_volume").apply()
+                refreshDeviceVolume()
                 PlaybackService.nextHandler = { next() }
                 PlaybackService.previousHandler = { previous() }
                 if (connected.currentMediaItem != null && playbackJob?.isActive != true) {

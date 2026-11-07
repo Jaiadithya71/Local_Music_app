@@ -58,8 +58,9 @@ fun FullPlayerSheet(
     onToggleLyrics: () -> Unit = {},
     onSleepTimer: () -> Unit = {},
     onEqualizer: () -> Unit = {},
-    appVolume: Float = 1f,
-    onAppVolumeChange: (Float) -> Unit = {},
+    deviceVolume: Int = 0,
+    maxDeviceVolume: Int = 15,
+    onDeviceVolumeChange: (Float) -> Unit = {},
     onVolumeUp: () -> Unit = {},
     onVolumeDown: () -> Unit = {},
     sleepTimerActive: Boolean = false,
@@ -232,9 +233,9 @@ fun FullPlayerSheet(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Volume: the app's own output gain. This always reaches the active
-            // output, including Bluetooth devices that ignore the phone's system
-            // volume link (the car-volume complaint this control was added for).
+            // Volume: the phone's media volume itself (same level the hardware
+            // buttons and system panel move), so the slider and buttons always
+            // stay in sync, including on a connected Bluetooth device.
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -246,9 +247,10 @@ fun FullPlayerSheet(
                     )
                 }
                 Slider(
-                    value = appVolume.coerceIn(0f, 1f),
-                    onValueChange = onAppVolumeChange,
+                    value = com.contentagent.vibestream.player.DeviceVolume.sliderFraction(deviceVolume, maxDeviceVolume),
+                    onValueChange = onDeviceVolumeChange,
                     valueRange = 0f..1f,
+                    steps = (maxDeviceVolume - 1).coerceAtLeast(0),
                     colors = SliderDefaults.colors(
                         thumbColor = AmberOrange,
                         activeTrackColor = AmberOrange,

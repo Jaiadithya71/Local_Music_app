@@ -34,7 +34,7 @@ jobs:
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon testDebugUnitTest --tests '*SongSeedPolicyTest' --tests '*RelatedSongCacheTest' --tests '*MusicSearchPolicyTest' --tests '*DiscoveryPolicyTest' --tests '*DiscoveryHomeTest' --tests '*QueueReconnectTest' --tests '*PersistenceTest' --tests '*MixBuilderTest' --tests '*PlaybackCacheTest' --tests '*AppVolumeGainTest' --tests '*SlowRadioHomeTest' --tests '*BackupImportSeedsTest'
+          ./gradlew --no-daemon testDebugUnitTest --tests '*SongSeedPolicyTest' --tests '*RelatedSongCacheTest' --tests '*MusicSearchPolicyTest' --tests '*DiscoveryPolicyTest' --tests '*DiscoveryHomeTest' --tests '*QueueReconnectTest' --tests '*PersistenceTest' --tests '*MixBuilderTest' --tests '*PlaybackCacheTest' --tests '*DeviceVolumeTest' --tests '*SlowRadioHomeTest' --tests '*BackupImportSeedsTest'
       # UI rendering runs in its own Gradle invocation: sharing one JVM let a
       # leaked coroutine from the ActivityScenario tests fail SlowRadioHomeTest
       # with UncaughtExceptionsBeforeTest (run 42339918221).
