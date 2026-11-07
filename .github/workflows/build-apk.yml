@@ -72,6 +72,15 @@ jobs:
         with:
           name: vibestream-debug-apk
           path: android/app/build/outputs/apk/debug/*.apk
+      # Make the RenderTest pixels publicly inspectable: a rolling ci-renders
+      # release (separate from the app releases) carries the latest screenshots.
+      - name: Publish UI renders
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view ci-renders >/dev/null 2>&1 || gh release create ci-renders --title "CI UI renders" --notes "Latest RenderTest screenshots from main. Not an app release." --latest=false
+          for f in /home/runner/renders/*.png; do gh release upload ci-renders "$f" --clobber; done
       - name: Publish release
         if: github.ref == 'refs/heads/main'
         env:
