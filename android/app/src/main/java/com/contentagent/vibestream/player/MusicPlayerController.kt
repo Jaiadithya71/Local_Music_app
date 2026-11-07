@@ -136,14 +136,29 @@ class MusicPlayerController(
     private val _maxDeviceVolume = MutableStateFlow(1)
     val maxDeviceVolume: StateFlow<Int> = _maxDeviceVolume.asStateFlow()
 
+    // The MediaController device-volume commands are not available through this
+    // app's session (emulator evidence: get/set/adjust all false), so the
+    // system -> app direction cannot rely on Player.onDeviceVolumeChanged. This
+    // receiver follows the same system broadcast the hardware buttons trigger.
+    private val volumeReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(ctx: Context?, intent: android.content.Intent?) {
+            if (intent?.action != "android.media.VOLUME_CHANGED_ACTION") return
+            if (intent.getIntExtra("android.media.EXTRA_VOLUME_STREAM_TYPE", -1) !=
+                android.media.AudioManager.STREAM_MUSIC) return
+            _deviceVolume.value = audioManager.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
+        }
+    }
+    private var volumeReceiverRegistered = false
+
     private fun refreshDeviceVolume() {
         _maxDeviceVolume.value = audioManager.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC).coerceAtLeast(1)
         _deviceVolume.value = audioManager.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
-        // Touch the player's device volume once so Media3's StreamVolumeManager
-        // on the service side arms its system-volume receiver; from then on
-        // onDeviceVolumeChanged reports outside changes (hardware buttons).
-        controller?.let { c ->
-            if (c.isCommandAvailable(Player.COMMAND_GET_DEVICE_VOLUME)) c.deviceVolume
+        if (!volumeReceiverRegistered) {
+            volumeReceiverRegistered = true
+            context.registerReceiver(
+                volumeReceiver,
+                android.content.IntentFilter("android.media.VOLUME_CHANGED_ACTION")
+            )
         }
     }
 
@@ -710,6 +725,10 @@ class MusicPlayerController(
 
     fun release() {
         stopProgressTracker()
+        if (volumeReceiverRegistered) {
+            volumeReceiverRegistered = false
+            try { context.unregisterReceiver(volumeReceiver) } catch (_: Exception) {}
+        }
         controller?.removeListener(listener)
         MediaController.releaseFuture(controllerFuture)
         playerScope.coroutineContext[Job]?.cancel()
