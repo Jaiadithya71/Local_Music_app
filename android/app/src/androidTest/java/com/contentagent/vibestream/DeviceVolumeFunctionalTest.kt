@@ -73,6 +73,7 @@ class DeviceVolumeFunctionalTest {
             onMain { controller.playSong(tone("volume-sync-tone")) }
             await("playback running so the media stream is active") { controller.isPlaying.value }
             await("controller reports stream geometry") { controller.maxDeviceVolume.value == max }
+            android.util.Log.i("PlaybackBenchmark", "device volume support: ${controller.debugDeviceVolumeSupport()}")
 
             // App -> phone: moving the slider moves the Android media volume.
             for (fraction in listOf(0.2f, 0.8f)) {

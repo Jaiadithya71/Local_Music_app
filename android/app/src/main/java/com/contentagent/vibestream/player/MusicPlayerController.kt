@@ -137,39 +137,45 @@ class MusicPlayerController(
     val maxDeviceVolume: StateFlow<Int> = _maxDeviceVolume.asStateFlow()
 
     private fun refreshDeviceVolume() {
-        val c = controller ?: return
         _maxDeviceVolume.value = audioManager.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC).coerceAtLeast(1)
-        if (c.isCommandAvailable(Player.COMMAND_GET_DEVICE_VOLUME)) {
-            _deviceVolume.value = c.deviceVolume
+        _deviceVolume.value = audioManager.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
+        // Touch the player's device volume once so Media3's StreamVolumeManager
+        // on the service side arms its system-volume receiver; from then on
+        // onDeviceVolumeChanged reports outside changes (hardware buttons).
+        controller?.let { c ->
+            if (c.isCommandAvailable(Player.COMMAND_GET_DEVICE_VOLUME)) c.deviceVolume
         }
     }
 
+    // Direct AudioManager on the media stream: this app and its playback service
+    // are one process, and routing the slider through the MediaController
+    // device-volume commands proved unreliable on the emulator (run 42342161849:
+    // no stream change), which would have shipped a dead slider.
     fun setDeviceVolumeFraction(fraction: Float) {
-        val c = controller ?: return
-        if (!c.isCommandAvailable(Player.COMMAND_SET_DEVICE_VOLUME)) return
         val target = DeviceVolume.volumeForFraction(fraction, _maxDeviceVolume.value)
         // No UI flag: the app slider is already the visible feedback, and a
         // system panel popping on every drag tick would fight it.
-        c.setDeviceVolume(target, 0)
+        audioManager.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, target, 0)
         _deviceVolume.value = target
     }
 
     fun volumeUp() {
-        val c = controller ?: return
-        if (c.isCommandAvailable(Player.COMMAND_ADJUST_DEVICE_VOLUME)) {
-            c.increaseDeviceVolume(0)
-        } else {
-            setDeviceVolumeFraction(DeviceVolume.sliderFraction(_deviceVolume.value + 1, _maxDeviceVolume.value))
-        }
+        audioManager.adjustStreamVolume(android.media.AudioManager.STREAM_MUSIC, android.media.AudioManager.ADJUST_RAISE, 0)
+        _deviceVolume.value = audioManager.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
     }
 
     fun volumeDown() {
-        val c = controller ?: return
-        if (c.isCommandAvailable(Player.COMMAND_ADJUST_DEVICE_VOLUME)) {
-            c.decreaseDeviceVolume(0)
-        } else {
-            setDeviceVolumeFraction(DeviceVolume.sliderFraction(_deviceVolume.value - 1, _maxDeviceVolume.value))
-        }
+        audioManager.adjustStreamVolume(android.media.AudioManager.STREAM_MUSIC, android.media.AudioManager.ADJUST_LOWER, 0)
+        _deviceVolume.value = audioManager.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
+    }
+
+    /** Diagnostic snapshot for instrumented tests and bug reports. */
+    fun debugDeviceVolumeSupport(): String {
+        val c = controller ?: return "no-controller"
+        return "get=${c.isCommandAvailable(Player.COMMAND_GET_DEVICE_VOLUME)} " +
+            "set=${c.isCommandAvailable(Player.COMMAND_SET_DEVICE_VOLUME)} " +
+            "adj=${c.isCommandAvailable(Player.COMMAND_ADJUST_DEVICE_VOLUME)} " +
+            "streamVol=${audioManager.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)}"
     }
 
     // ---- Queue persistence ----
