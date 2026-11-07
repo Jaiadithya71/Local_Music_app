@@ -124,6 +124,7 @@ fun HomeScreen(
     var showSleepDialog by remember { mutableStateOf(false) }
     var showEqDialog by remember { mutableStateOf(false) }
     val sleepEndAt by playerController.sleepEndAtMs.collectAsState()
+    val appVolume by playerController.appVolume.collectAsState()
     val sleepEndOfTrack by playerController.sleepEndOfTrack.collectAsState()
     // Attach the EQ to the player audio session once playback exists.
     LaunchedEffect(isPlaying) { if (isPlaying) eqManager.ensure() }
@@ -797,6 +798,10 @@ fun HomeScreen(
             onToggleLyrics = { showLyrics = !showLyrics },
             onSleepTimer = { showSleepDialog = true },
             onEqualizer = { eqManager.ensure(); showEqDialog = true },
+            appVolume = appVolume,
+            onAppVolumeChange = { playerController.setAppVolume(it) },
+            onVolumeUp = { playerController.volumeUp() },
+            onVolumeDown = { playerController.volumeDown() },
             sleepTimerActive = sleepEndAt != null || sleepEndOfTrack,
             lyricsContent = {
                 LyricsView(loading = lyricsLoading, lyrics = lyricsResult, positionMs = currentPosition)

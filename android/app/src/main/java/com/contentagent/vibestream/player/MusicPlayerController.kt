@@ -100,14 +100,14 @@ class MusicPlayerController(
             while (isActive) {
                 val remaining = endAt - System.currentTimeMillis()
                 if (remaining <= 0) break
-                if (remaining <= 15_000L) {
-                    controller?.volume = (remaining / 15_000f).coerceIn(0f, 1f)
+                if (remaining <= AppVolumeGain.FADE_WINDOW_MS) {
+                    controller?.volume = AppVolumeGain.effectiveGain(_appVolume.value, remaining)
                 }
                 delay(250)
             }
             controller?.pause()
-            controller?.volume = 1f
             _sleepEndAtMs.value = null
+            applyVolume()
         }
     }
 
@@ -121,7 +121,39 @@ class MusicPlayerController(
         sleepJob = null
         _sleepEndAtMs.value = null
         _sleepEndOfTrack.value = false
-        controller?.volume = 1f
+        applyVolume()
+    }
+
+    // ---- App volume (the app's own output gain) ----
+    // ExoPlayer's per-player gain scales the audio samples before they reach any
+    // output, so it always changes what a Bluetooth device plays - even when the
+    // connected device ignores the phone's "absolute volume" link and the phone's
+    // volume keys appear to do nothing. Persisted; the sleep-timer fade
+    // multiplies this base level instead of replacing it.
+    private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val _appVolume = MutableStateFlow(prefs.getFloat(KEY_APP_VOLUME, 1f).coerceIn(0f, 1f))
+    val appVolume: StateFlow<Float> = _appVolume.asStateFlow()
+
+    private fun applyVolume() {
+        val fadeRemaining = _sleepEndAtMs.value?.let { end ->
+            (end - System.currentTimeMillis()).takeIf { it in 0 until AppVolumeGain.FADE_WINDOW_MS }
+        }
+        controller?.volume = AppVolumeGain.effectiveGain(_appVolume.value, fadeRemaining)
+    }
+
+    fun setAppVolume(volume: Float) {
+        val v = volume.coerceIn(0f, 1f)
+        _appVolume.value = v
+        prefs.edit().putFloat(KEY_APP_VOLUME, v).apply()
+        applyVolume()
+    }
+
+    fun volumeUp() = setAppVolume(_appVolume.value + 0.1f)
+    fun volumeDown() = setAppVolume(_appVolume.value - 0.1f)
+
+    private companion object {
+        const val PREFS_NAME = "vibestream_player"
+        const val KEY_APP_VOLUME = "app_volume"
     }
 
     // ---- Queue persistence ----
@@ -387,6 +419,7 @@ class MusicPlayerController(
                 // A selection made while the connection was pending wins.
                 if (_queue.value.isEmpty()) restoreQueueFor(connected.currentMediaItem)
                 connected.addListener(listener)
+                applyVolume()
                 PlaybackService.nextHandler = { next() }
                 PlaybackService.previousHandler = { previous() }
                 if (connected.currentMediaItem != null && playbackJob?.isActive != true) {

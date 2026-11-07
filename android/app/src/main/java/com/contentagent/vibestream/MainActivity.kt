@@ -38,6 +38,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Route the hardware volume keys to the media stream while VibeStream is
+        // open, so they always drive music (and a connected Bluetooth device's
+        // volume) instead of the ringtone stream.
+        volumeControlStream = android.media.AudioManager.STREAM_MUSIC
+
         // Initialize on-device components (zero external server required)
         extractor = YouTubeExtractor()
         offlineStorage = OfflineStorage(applicationContext)

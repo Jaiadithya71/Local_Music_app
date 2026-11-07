@@ -58,6 +58,10 @@ fun FullPlayerSheet(
     onToggleLyrics: () -> Unit = {},
     onSleepTimer: () -> Unit = {},
     onEqualizer: () -> Unit = {},
+    appVolume: Float = 1f,
+    onAppVolumeChange: (Float) -> Unit = {},
+    onVolumeUp: () -> Unit = {},
+    onVolumeDown: () -> Unit = {},
     sleepTimerActive: Boolean = false,
     lyricsContent: (@Composable () -> Unit)? = null
 ) {
@@ -222,6 +226,40 @@ fun FullPlayerSheet(
                         if (repeat == 2) Icons.Default.RepeatOne else Icons.Default.Repeat,
                         contentDescription = "Repeat",
                         tint = if (repeat > 0) AmberOrange else TextSecondary, modifier = Modifier.size(26.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Volume: the app's own output gain. This always reaches the active
+            // output, including Bluetooth devices that ignore the phone's system
+            // volume link (the car-volume complaint this control was added for).
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onVolumeDown) {
+                    Icon(
+                        Icons.Default.VolumeDown, contentDescription = "Volume down",
+                        tint = TextSecondary, modifier = Modifier.size(26.dp)
+                    )
+                }
+                Slider(
+                    value = appVolume.coerceIn(0f, 1f),
+                    onValueChange = onAppVolumeChange,
+                    valueRange = 0f..1f,
+                    colors = SliderDefaults.colors(
+                        thumbColor = AmberOrange,
+                        activeTrackColor = AmberOrange,
+                        inactiveTrackColor = DarkSurfaceBorder
+                    ),
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(onClick = onVolumeUp) {
+                    Icon(
+                        Icons.Default.VolumeUp, contentDescription = "Volume up",
+                        tint = TextSecondary, modifier = Modifier.size(26.dp)
                     )
                 }
             }
