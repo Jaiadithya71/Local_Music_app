@@ -236,6 +236,7 @@ class RenderTest {
                         onTogglePlayPause = {}, onSeekTo = {},
                         onSkipForward = {}, onSkipBackward = {},
                         onDownloadClick = {}, onDismiss = {},
+                        deviceVolume = 10, maxDeviceVolume = 15,
                         showLyrics = true,
                         sleepTimerActive = true,
                         lyricsContent = {
