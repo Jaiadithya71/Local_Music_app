@@ -3,7 +3,7 @@ set +e
 mkdir -p playback-evidence
 adb shell svc wifi disable
 adb shell svc data disable
-(cd android && ./gradlew --no-daemon connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.contentagent.vibestream.PlaybackSmokeTest)
+(cd android && ./gradlew --no-daemon connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.contentagent.vibestream.PlaybackSmokeTest,com.contentagent.vibestream.DeviceVolumeFunctionalTest)
 result=$?
 adb logcat -d > playback-evidence/player-log.txt
 grep -E 'PlaybackBenchmark|PlaybackException|ExoPlaybackException|AndroidRuntime|TestRunner|Unable to|Error|error|denied' playback-evidence/player-log.txt | tail -140 || true
