@@ -6,6 +6,10 @@ import android.media.MediaExtractor
 import android.media.MediaFormat
 import com.contentagent.vibestream.data.extractor.YouTubeExtractor
 import com.contentagent.vibestream.data.model.Song
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -35,16 +39,31 @@ class DownloadManager(
 
     private val downloadingSet = ConcurrentHashMap.newKeySet<String>()
 
-    fun isDownloading(videoId: String): Boolean = downloadingSet.contains(videoId)
+    private val _downloadErrors = MutableStateFlow<Map<String, String>>(emptyMap())
+    val downloadErrors = _downloadErrors.asStateFlow()
+    private val queue = TrackDownloadQueue(
+        CoroutineScope(SupervisorJob() + Dispatchers.IO),
+        isSaved = { offlineStorage.isDownloaded(it) || downloadingSet.contains(it) },
+        onQueued = { id ->
+            _downloadErrors.update { it - id }
+            updateProgress(id, 0f)
+        },
+        transfer = { song -> downloadTrack(song) }
+    )
+
+    fun enqueueTracks(songs: List<Song>) = queue.enqueue(songs)
+
+    fun isDownloading(videoId: String): Boolean = _downloadProgressMap.value.containsKey(videoId)
 
     suspend fun downloadTrack(song: Song, onComplete: ((Boolean, String?) -> Unit)? = null) = withContext(Dispatchers.IO) {
-        if (downloadingSet.contains(song.id)) return@withContext
         if (offlineStorage.isDownloaded(song.id)) {
+            removeProgress(song.id)
             onComplete?.invoke(true, offlineStorage.getLocalSong(song.id)?.localFilePath)
             return@withContext
         }
 
-        downloadingSet.add(song.id)
+        if (!downloadingSet.add(song.id)) return@withContext
+        _downloadErrors.update { it - song.id }
         updateProgress(song.id, 0.05f)
 
         var completedFile: File? = null
@@ -54,6 +73,7 @@ class DownloadManager(
             if (streamUrl.isNullOrEmpty()) {
                 downloadingSet.remove(song.id)
                 removeProgress(song.id)
+                _downloadErrors.update { it + (song.id to "Could not resolve audio. Tap to retry.") }
                 onComplete?.invoke(false, "Could not resolve audio stream URL")
                 return@withContext
             }
@@ -136,6 +156,12 @@ class DownloadManager(
 
         } catch (e: Exception) {
             completedFile?.delete()
+            if (e is CancellationException) {
+                downloadingSet.remove(song.id)
+                removeProgress(song.id)
+                throw e
+            }
+            _downloadErrors.update { it + (song.id to "Download failed. Tap to retry.") }
             e.printStackTrace()
             downloadingSet.remove(song.id)
             removeProgress(song.id)
@@ -144,14 +170,10 @@ class DownloadManager(
     }
 
     private fun updateProgress(videoId: String, progress: Float) {
-        val current = _downloadProgressMap.value.toMutableMap()
-        current[videoId] = progress
-        _downloadProgressMap.value = current
+        _downloadProgressMap.update { it + (videoId to progress) }
     }
 
     private fun removeProgress(videoId: String) {
-        val current = _downloadProgressMap.value.toMutableMap()
-        current.remove(videoId)
-        _downloadProgressMap.value = current
+        _downloadProgressMap.update { it - videoId }
     }
 }

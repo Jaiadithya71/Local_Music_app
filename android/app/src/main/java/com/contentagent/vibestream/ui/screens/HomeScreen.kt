@@ -89,6 +89,7 @@ fun HomeScreen(
     // Collect reactive state flows
     val downloadedSongs by offlineStorage.downloadedSongs.collectAsState()
     val downloadProgressMap by downloadManager.downloadProgressMap.collectAsState()
+    val downloadErrors by downloadManager.downloadErrors.collectAsState()
     val currentSong by playerController.currentSong.collectAsState()
     val isPlaying by playerController.isPlaying.collectAsState()
     val isBuffering by playerController.isBuffering.collectAsState()
@@ -623,6 +624,10 @@ fun HomeScreen(
                             section = librarySection,
                             library = library,
                             currentSongId = currentSong?.id,
+                            downloadedIds = downloadedSongs.map { it.id }.toSet(),
+                            downloadProgress = downloadProgressMap,
+                            downloadErrors = downloadErrors,
+                            onDownload = { downloadManager.enqueueTracks(it) },
                             onPlay = { sg, ctx -> playerController.playSong(offlineStorage.getLocalSong(sg.id) ?: sg, ctx) }
                         )
                     }

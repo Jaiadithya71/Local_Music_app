@@ -96,7 +96,11 @@ fun LibrarySection(
     section: Int, // 1 liked, 2 playlists, 3 recent
     library: LibraryStore,
     currentSongId: String?,
-    onPlay: (Song, List<Song>) -> Unit
+    onPlay: (Song, List<Song>) -> Unit,
+    downloadedIds: Set<String> = emptySet(),
+    downloadProgress: Map<String, Float> = emptyMap(),
+    downloadErrors: Map<String, String> = emptyMap(),
+    onDownload: (List<Song>) -> Unit = {}
 ) {
     val liked by library.liked.collectAsState()
     val recent by library.recent.collectAsState()
@@ -110,29 +114,14 @@ fun LibrarySection(
         else -> {
             val open = playlists.firstOrNull { it.name == openPlaylist }
             if (open != null) {
-                Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = { openPlaylist = null }) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = TextPrimary)
-                        }
-                        Text(open.name, color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.weight(1f))
-                        IconButton(onClick = { library.deletePlaylist(open.name); openPlaylist = null }) {
-                            Icon(Icons.Default.Delete, contentDescription = "Delete playlist", tint = TextSecondary)
-                        }
-                    }
-                    if (open.songs.isEmpty()) {
-                        Text("Empty. Add songs from Now Playing.", color = TextTertiary, modifier = Modifier.padding(16.dp))
-                    }
-                    LazyColumn {
-                        items(open.songs, key = { it.id }) { s ->
-                            SongRow(s, s.id == currentSongId, { onPlay(s, open.songs) }) {
-                                IconButton(onClick = { library.removeFromPlaylist(open.name, s.id) }) {
-                                    Icon(Icons.Default.Close, contentDescription = "Remove", tint = TextSecondary)
-                                }
-                            }
-                        }
-                    }
-                }
+                PlaylistDetail(
+                    playlist = open, currentSongId = currentSongId,
+                    downloadedIds = downloadedIds, downloadProgress = downloadProgress,
+                    downloadErrors = downloadErrors, onDownload = onDownload,
+                    onPlay = onPlay, onBack = { openPlaylist = null },
+                    onDelete = { library.deletePlaylist(open.name); openPlaylist = null },
+                    onRemove = { library.removeFromPlaylist(open.name, it) }
+                )
             } else {
                 Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
                     TextButton(onClick = { showNew = true }) {
@@ -164,6 +153,75 @@ fun LibrarySection(
     }
     if (showNew) {
         NewPlaylistDialog(onDismiss = { showNew = false }, onCreate = { library.createPlaylist(it); showNew = false })
+    }
+}
+
+/** Download actions stay separate from play and remove, with 48dp touch targets. */
+@Composable
+fun PlaylistDetail(
+    playlist: Playlist,
+    currentSongId: String?,
+    downloadedIds: Set<String>,
+    downloadProgress: Map<String, Float>,
+    downloadErrors: Map<String, String>,
+    onDownload: (List<Song>) -> Unit,
+    onPlay: (Song, List<Song>) -> Unit,
+    onBack: () -> Unit,
+    onDelete: () -> Unit,
+    onRemove: (String) -> Unit
+) {
+    val missing = playlist.songs.distinctBy { it.id }.filter { it.id !in downloadedIds && it.id !in downloadProgress }
+    val saved = playlist.songs.count { it.id in downloadedIds }
+    val pending = playlist.songs.count { it.id in downloadProgress }
+    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back", tint = TextPrimary) }
+            Text(playlist.name, color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 18.sp,
+                maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, "Delete playlist", tint = TextSecondary) }
+        }
+        Text("${playlist.songs.size} songs · $saved offline" + if (pending > 0) " · $pending queued / downloading" else "",
+            color = TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(vertical = 8.dp))
+        FilledTonalButton(onClick = { onDownload(missing) }, enabled = missing.isNotEmpty(), modifier = Modifier.fillMaxWidth()) {
+            Icon(if (saved == playlist.songs.size && saved > 0) Icons.Default.DownloadDone else Icons.Default.Download, null)
+            Spacer(Modifier.width(8.dp))
+            Text(when {
+                playlist.songs.isEmpty() -> "No songs to download"
+                saved == playlist.songs.size -> "Playlist downloaded"
+                missing.isEmpty() -> "Downloads in progress"
+                else -> "Download ${missing.size} songs"
+            })
+        }
+        Text("Saves audio on this device. Uses your current connection. Keep the app open until finished.",
+            color = TextTertiary, fontSize = 11.sp, modifier = Modifier.padding(vertical = 8.dp))
+        if (playlist.songs.isEmpty()) Text("Empty. Add songs from Now Playing.", color = TextTertiary, modifier = Modifier.padding(16.dp))
+        LazyColumn {
+            items(playlist.songs, key = { it.id }) { song ->
+                Column {
+                    SongRow(song, song.id == currentSongId, { onPlay(song, playlist.songs) }) {
+                        val savedSong = song.id in downloadedIds
+                        val progress = downloadProgress[song.id]
+                        IconButton(onClick = { onDownload(listOf(song)) }, enabled = !savedSong && progress == null) {
+                            when {
+                                savedSong -> Icon(Icons.Default.DownloadDone, "Downloaded: ${song.title}", tint = AmberOrange)
+                                progress != null -> CircularProgressIndicator(modifier = Modifier.size(22.dp), color = AmberOrange, strokeWidth = 2.dp)
+                                else -> Icon(Icons.Default.Download, "Download: ${song.title}", tint = AmberOrange)
+                            }
+                        }
+                        IconButton(onClick = { onRemove(song.id) }) { Icon(Icons.Default.Close, "Remove: ${song.title}", tint = TextSecondary) }
+                    }
+                    val progress = downloadProgress[song.id]
+                    val status = when {
+                        song.id in downloadedIds -> "Available offline"
+                        progress == 0f -> "Queued"
+                        progress != null -> "Downloading ${(progress * 100).toInt()}%"
+                        else -> downloadErrors[song.id]
+                    }
+                    if (status != null) Text(status, color = if (song.id in downloadErrors) MaterialTheme.colorScheme.error else TextSecondary,
+                        fontSize = 11.sp, modifier = Modifier.padding(start = 64.dp, bottom = 4.dp))
+                }
+            }
+        }
     }
 }
 
