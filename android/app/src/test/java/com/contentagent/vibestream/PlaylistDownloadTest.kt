@@ -47,7 +47,9 @@ class PlaylistDownloadTest {
         compose.onNodeWithContentDescription("Downloaded: Nenjukkul Peidhidum").assertIsNotEnabled()
         compose.onNodeWithText("Queued").assertExists()
         compose.onNodeWithText("Downloading 54%").assertExists()
+        compose.onNode(hasScrollAction()).performScrollToIndex(4)
         compose.onNodeWithText("Download failed. Tap to retry.").assertExists()
+        compose.onNode(hasScrollAction()).performScrollToIndex(0)
         compose.runOnIdle {
             val view = compose.activity.window.decorView
             val bmp = android.graphics.Bitmap.createBitmap(view.width, view.height, android.graphics.Bitmap.Config.ARGB_8888)
