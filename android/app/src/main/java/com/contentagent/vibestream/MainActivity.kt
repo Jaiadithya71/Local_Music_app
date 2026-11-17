@@ -48,7 +48,10 @@ class MainActivity : ComponentActivity() {
         offlineStorage = OfflineStorage(applicationContext)
         library = LibraryStore(applicationContext)
         downloadManager = DownloadManager(applicationContext, extractor, offlineStorage)
-        playerController = MusicPlayerController(applicationContext, extractor, QueueStore(applicationContext))
+        playerController = MusicPlayerController(
+            applicationContext, extractor, QueueStore(applicationContext),
+            com.contentagent.vibestream.data.local.StreamUrlStore(applicationContext)
+        )
 
         // Spotify-style media-notification actions (like / shuffle), handled app-side.
         PlaybackService.likeHandler = {

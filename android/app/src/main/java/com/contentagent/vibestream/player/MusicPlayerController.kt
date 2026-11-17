@@ -13,6 +13,7 @@ import androidx.core.content.ContextCompat
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import com.contentagent.vibestream.data.extractor.YouTubeExtractor
+import com.contentagent.vibestream.data.local.StreamUrlStore
 import com.contentagent.vibestream.data.model.Song
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -32,7 +33,8 @@ import java.io.File
 class MusicPlayerController(
     private val context: Context,
     private val extractor: YouTubeExtractor,
-    private val queueStore: com.contentagent.vibestream.data.local.QueueStore? = null
+    private val queueStore: com.contentagent.vibestream.data.local.QueueStore? = null,
+    private val streamUrlStore: StreamUrlStore? = null
 ) {
 
     private val playerScope = CoroutineScope(Dispatchers.Main + Job())
@@ -74,6 +76,17 @@ class MusicPlayerController(
 
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+
+    // ---- Tap-to-sound timer + stall counter (shown in the player sheet) ----
+    // tapStartedAtMs is stamped when a tap starts playback; the first
+    // onIsPlayingChanged(true) after it completes the measurement.
+    private var tapStartedAtMs = 0L
+    private var tapMeasured = false
+    private val _tapToSoundMs = MutableStateFlow<Long?>(null)
+    val tapToSoundMs: StateFlow<Long?> = _tapToSoundMs.asStateFlow()
+    // Buffering spells after sound first played (rebuffers and seek pauses).
+    private val _rebufferCount = MutableStateFlow(0)
+    val rebufferCount: StateFlow<Int> = _rebufferCount.asStateFlow()
 
     // ---- Play queue ----
     private val _queue = MutableStateFlow<List<Song>>(emptyList())
@@ -347,6 +360,12 @@ class MusicPlayerController(
             override fun onIsPlayingChanged(playing: Boolean) {
                 _isPlaying.value = playing
                 if (playing) {
+                    if (!tapMeasured && tapStartedAtMs > 0L) {
+                        tapMeasured = true
+                        val ms = android.os.SystemClock.elapsedRealtime() - tapStartedAtMs
+                        _tapToSoundMs.value = ms
+                        android.util.Log.i("VibeStream", "tap-to-sound ${ms}ms id=${_currentSong.value?.id}")
+                    }
                     startProgressTracker()
                 } else {
                     stopProgressTracker()
@@ -357,6 +376,9 @@ class MusicPlayerController(
                 when (playbackState) {
                     Player.STATE_BUFFERING -> {
                         _isBuffering.value = true
+                        // Only count once sound has played: initial load is the
+                        // tap-to-sound wait, later spells are stalls.
+                        if (tapMeasured) _rebufferCount.value++
                     }
                     Player.STATE_READY -> {
                         _isBuffering.value = false
@@ -430,7 +452,13 @@ class MusicPlayerController(
                     playbackGeneration++
                     val generation = playbackGeneration
                     playerScope.launch {
-                        val url = next ?: extractor.resolveAudioCandidates(song.id).firstOrNull()
+                        val resolvedFirst = if (next == null) {
+                            val all = extractor.resolveAudioCandidates(song.id)
+                            if (all.isNotEmpty()) streamUrlStore?.put(song.id, all)
+                            pendingCandidates.addAll(all.drop(1).take(4))
+                            all.firstOrNull()
+                        } else null
+                        val url = next ?: resolvedFirst
                         if (generation != playbackGeneration || _currentSong.value?.id != song.id) return@launch
                         if (url == null) {
                             _isBuffering.value = false
@@ -540,14 +568,22 @@ class MusicPlayerController(
         val nextSong = q[target]
         prefetchJob = playerScope.launch {
             try {
+                val now = System.currentTimeMillis()
+                val stored = streamUrlStore?.get(nextSong.id, now)
                 val url: String = when {
                     nextSong.isDownloaded && !nextSong.localFilePath.isNullOrEmpty() &&
                         File(nextSong.localFilePath!!).isFile && File(nextSong.localFilePath!!).length() > 0 ->
                         "file://${nextSong.localFilePath}"
-                    !nextSong.streamUrl.isNullOrEmpty() -> nextSong.streamUrl!!
+                    stored != null -> {
+                        prefetchAlts[nextSong.id] = stored.alternates
+                        nextSong.streamUrl = stored.url
+                        stored.url
+                    }
+                    StreamUrlStore.isFreshUrl(nextSong.streamUrl, now) -> nextSong.streamUrl!!
                     else -> {
                         val all = extractor.resolveAudioCandidates(nextSong.id)
                         if (all.isEmpty()) return@launch
+                        streamUrlStore?.put(nextSong.id, all)
                         prefetchAlts[nextSong.id] = all.drop(1).take(4)
                         nextSong.streamUrl = all[0]
                         all[0]
@@ -588,6 +624,47 @@ class MusicPlayerController(
         return MediaItem.Builder().setUri(uri).setMediaId(song.id).setMediaMetadata(metadata).build()
     }
 
+    // ---- Visible-songs warmup ----
+    // Resolves stream URLs and primes the first seconds of audio for songs the
+    // user can see (search results, top Home shelf), so tapping one starts from
+    // a resolved URL and cached bytes instead of a cold network resolve. Serial
+    // and throttled: one extraction at a time, never competing with playback.
+    private var warmupJob: Job? = null
+    private val warmedThisSession = mutableSetOf<String>()
+
+    fun prefetchVisible(songs: List<Song>, maxCount: Int = 4) {
+        val store = streamUrlStore ?: return
+        warmupJob?.cancel()
+        val targets = songs
+            .filter { it.id.isNotBlank() && !it.isDownloaded }
+            .distinctBy { it.id }
+            .filter { it.id !in warmedThisSession && _currentSong.value?.id != it.id }
+            .take(maxCount)
+        if (targets.isEmpty()) return
+        warmupJob = playerScope.launch(Dispatchers.IO) {
+            for (song in targets) {
+                if (!isActive) break
+                try {
+                    warmedThisSession.add(song.id)
+                    val url = store.get(song.id)?.url ?: run {
+                        val all = extractor.resolveAudioCandidates(song.id)
+                        if (all.isNotEmpty()) {
+                            store.put(song.id, all)
+                            song.streamUrl = all[0]
+                        }
+                        all.firstOrNull()
+                    } ?: continue
+                    StreamWarmup.warm(context, url)
+                    delay(600)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    // Best effort: a tap later resolves on demand.
+                }
+            }
+        }
+    }
+
     fun playSong(song: Song, context: List<Song>? = null) {
         shufflePlayed.clear()
         if (context != null && context.any { it.id == song.id }) {
@@ -617,19 +694,32 @@ class MusicPlayerController(
         _duration.value = song.durationSec * 1000L
         _isPlaying.value = false
         _isBuffering.value = true
+        // Start the tap-to-sound clock and reset the stall counter for this pick.
+        tapStartedAtMs = android.os.SystemClock.elapsedRealtime()
+        tapMeasured = false
+        _tapToSoundMs.value = null
+        _rebufferCount.value = 0
         // Alternatives belong to this track, never to a previous selection.
         pendingCandidates.clear()
         playbackJob = playerScope.launch {
             _errorMessage.value = null
             _isBuffering.value = true
 
+            val now = System.currentTimeMillis()
+            val stored = streamUrlStore?.get(song.id, now)
             val playableUri: Uri? = when {
                 // Play locally if file exists on device
                 song.isDownloaded && !song.localFilePath.isNullOrEmpty() && File(song.localFilePath!!).isFile && File(song.localFilePath!!).length() > 0 -> {
                     Uri.fromFile(File(song.localFilePath!!))
                 }
-                // Use already cached stream URL
-                !song.streamUrl.isNullOrEmpty() -> {
+                // Warmed or previously resolved URL, still inside its signed lifetime
+                stored != null -> {
+                    pendingCandidates.addAll(stored.alternates)
+                    song.streamUrl = stored.url
+                    Uri.parse(stored.url)
+                }
+                // Use already cached stream URL only while its signature is valid
+                StreamUrlStore.isFreshUrl(song.streamUrl, now) -> {
                     Uri.parse(song.streamUrl)
                 }
                 // Resolve stream on-the-fly from YouTube
@@ -638,7 +728,9 @@ class MusicPlayerController(
                     if (generation != playbackGeneration) return@launch
                     pendingCandidates.clear()
                     if (all.isNotEmpty()) {
+                        streamUrlStore?.put(song.id, all)
                         pendingCandidates.addAll(all.drop(1).take(4))
+                        song.streamUrl = all[0]
                         Uri.parse(all[0])
                     } else {
                         _isBuffering.value = false
@@ -680,7 +772,49 @@ class MusicPlayerController(
         if (c?.isPlaying == true) {
             c.pause()
         } else {
-            c?.play()
+            // A stream paused past its URL's signed lifetime would 403 on resume
+            // and wait for the error-recovery path. Refresh it up front instead,
+            // keeping the position, so resuming stays uninterrupted.
+            val uri = c?.currentMediaItem?.localConfiguration?.uri?.toString()
+            val song = _currentSong.value
+            if (song != null && uri != null && uri.contains("googlevideo.com") &&
+                !StreamUrlStore.isFreshUrl(uri, System.currentTimeMillis())) {
+                resumeWithFreshStream(song)
+            } else {
+                c?.play()
+            }
+        }
+    }
+
+    /** Re-resolves the current song's expired stream and resumes at the position. */
+    private fun resumeWithFreshStream(song: Song) {
+        playbackGeneration++
+        val generation = playbackGeneration
+        _isBuffering.value = true
+        playerScope.launch {
+            val resumeMs = controller?.currentPosition?.coerceAtLeast(0) ?: _currentPosition.value
+            val stored = streamUrlStore?.get(song.id)
+            val fresh: List<String> = stored?.let { listOf(it.url) + it.alternates } ?: run {
+                val all = extractor.resolveAudioCandidates(song.id)
+                if (all.isNotEmpty()) streamUrlStore?.put(song.id, all)
+                all
+            }
+            if (generation != playbackGeneration || _currentSong.value?.id != song.id) return@launch
+            val url = fresh.firstOrNull()
+            if (url == null) {
+                _isBuffering.value = false
+                _errorMessage.value = "Could not refresh audio stream. Retry playback."
+                return@launch
+            }
+            pendingCandidates.clear()
+            pendingCandidates.addAll(fresh.drop(1).take(4))
+            song.streamUrl = url
+            controller?.let { c ->
+                c.setMediaItem(buildItem(song, Uri.parse(url)), resumeMs)
+                c.prepare()
+                c.playWhenReady = true
+                scheduleNextPrefetch()
+            }
         }
     }
 

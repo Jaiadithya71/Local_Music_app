@@ -127,6 +127,12 @@ fun HomeScreen(
     val sleepEndAt by playerController.sleepEndAtMs.collectAsState()
     val deviceVolume by playerController.deviceVolume.collectAsState()
     val maxDeviceVolume by playerController.maxDeviceVolume.collectAsState()
+    val tapToSoundMs by playerController.tapToSoundMs.collectAsState()
+    val rebufferCount by playerController.rebufferCount.collectAsState()
+    val playbackStats = listOfNotNull(
+        tapToSoundMs?.let { "Started in ${"%.1f".format(it / 1000f)} s" },
+        if (rebufferCount > 0) "Stalls: $rebufferCount" else null
+    ).joinToString("  ·  ")
     val sleepEndOfTrack by playerController.sleepEndOfTrack.collectAsState()
     // Attach the EQ to the player audio session once playback exists.
     LaunchedEffect(isPlaying) { if (isPlaying) eqManager.ensure() }
@@ -183,6 +189,9 @@ fun HomeScreen(
                 searchResults = results
                 if (results.isEmpty()) {
                     searchError = "No songs found for '$query'. Try another search term."
+                } else {
+                    // Warm the top results so tapping one starts immediately.
+                    playerController.prefetchVisible(results.take(4))
                 }
             } catch (e: Exception) {
                 searchError = "Search error: ${e.localizedMessage}"
@@ -730,7 +739,8 @@ fun HomeScreen(
                     currentSongId = currentSong?.id,
                     onPlay = { sg, ctx -> playerController.playSong(sg, ctx) },
                     onSeeAll = { q -> selectedTab = 1; searchQuery = q; performSearch(q) },
-                    skippedArtists = artistSkips.filterValues { it >= 2 }.keys
+                    skippedArtists = artistSkips.filterValues { it >= 2 }.keys,
+                    onSongsVisible = { songs -> playerController.prefetchVisible(songs.take(4)) }
                 )
             }
         }
@@ -810,6 +820,7 @@ fun HomeScreen(
             onVolumeUp = { playerController.volumeUp() },
             onVolumeDown = { playerController.volumeDown() },
             sleepTimerActive = sleepEndAt != null || sleepEndOfTrack,
+            playbackStats = playbackStats,
             lyricsContent = {
                 LyricsView(loading = lyricsLoading, lyrics = lyricsResult, positionMs = currentPosition)
             }

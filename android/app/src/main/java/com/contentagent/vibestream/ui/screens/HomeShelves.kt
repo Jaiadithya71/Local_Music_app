@@ -180,7 +180,10 @@ fun HomeShelves(
     onEditTaste: () -> Unit = {},
     musicOnly: Boolean = true,
     onModeChange: (Boolean) -> Unit = {},
-    skippedArtists: Set<String> = emptySet()
+    skippedArtists: Set<String> = emptySet(),
+    // Fires with the leading songs of the top shelf once shelves have loaded,
+    // so the player can warm their streams before they are tapped.
+    onSongsVisible: (List<Song>) -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
     val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -248,6 +251,8 @@ fun HomeShelves(
                 }
             }
         } finally { refreshing = false; forceRefresh = false }
+        val topShelf = ShelfCache.data[cacheKey(shelfList.first().second, musicOnly)].orEmpty()
+        if (topShelf.isNotEmpty()) onSongsVisible(topShelf.take(6))
     }
     if (cacheDialog) {
         androidx.compose.material3.AlertDialog(onDismissRequest = { cacheDialog = false },

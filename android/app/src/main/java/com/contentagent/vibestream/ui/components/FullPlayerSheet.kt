@@ -64,6 +64,7 @@ fun FullPlayerSheet(
     onVolumeUp: () -> Unit = {},
     onVolumeDown: () -> Unit = {},
     sleepTimerActive: Boolean = false,
+    playbackStats: String = "",
     lyricsContent: (@Composable () -> Unit)? = null
 ) {
     ModalBottomSheet(
@@ -317,6 +318,17 @@ fun FullPlayerSheet(
                         tint = TextSecondary, modifier = Modifier.size(26.dp)
                     )
                 }
+            }
+
+            if (playbackStats.isNotBlank()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = playbackStats,
+                    color = TextTertiary,
+                    fontSize = 11.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
 
             if (showLyrics && lyricsContent != null) {

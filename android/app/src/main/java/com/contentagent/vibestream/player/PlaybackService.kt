@@ -3,9 +3,6 @@ package com.contentagent.vibestream.player
 import android.content.Intent
 import android.os.Bundle
 import androidx.media3.common.Player
-import androidx.media3.datasource.DataSpec
-import androidx.media3.datasource.DefaultHttpDataSource
-import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.CommandButton
@@ -112,26 +109,10 @@ class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
-        val http = DefaultHttpDataSource.Factory()
-            .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(15000)
-            .setReadTimeoutMs(20000)
-        // DefaultHttpDataSource alone rejects file:// offline tracks. The default
-        // wrapper selects the file/asset/content reader and delegates HTTP only.
-        val sources = androidx.media3.datasource.DefaultDataSource.Factory(this, http)
-        val factory = ResolvingDataSource.Factory(sources) { spec: DataSpec ->
-            val u = spec.uri.toString()
-            if (u.contains("googlevideo.com")) {
-                val ua = when {
-                    u.contains("c=IOS") -> "com.google.ios.youtube/19.45.4 (iPhone16,2; U; CPU iOS 18_1_0 like Mac OS X;)"
-                    u.contains("c=ANDROID") -> "com.google.android.youtube/19.44.38 (Linux; U; Android 11) gzip"
-                    else -> "Mozilla/5.0 (Windows NT 10.0; rv:128.0) Gecko/20100101 Firefox/128.0"
-                }
-                spec.buildUpon()
-                    .setHttpRequestHeaders(spec.httpRequestHeaders + mapOf("User-Agent" to ua))
-                    .build()
-            } else spec
-        }
+        // Same stack the stream warmer primes, so warmed bytes are the bytes
+        // this player asks for. DefaultHttpDataSource alone rejects file://
+        // offline tracks; the wrapper inside selects file/asset readers.
+        val factory = StreamWarmup.resolvingFactory(this)
         // Let ExoPlayer own audio focus: calls, alarms and other apps taking focus
         // pause playback (and resume after a transient loss), a permanent focus
         // loss stops it, and yanking headphones pauses instead of blasting
@@ -142,6 +123,20 @@ class PlaybackService : MediaSessionService() {
             .build()
         val exo = ExoPlayer.Builder(this)
             .setMediaSourceFactory(DefaultMediaSourceFactory(PlaybackCache.factory(this, factory)))
+            // Tuned for fast start AND uninterrupted play, not the stock 50s/50s
+            // defaults: sound after ~1.5s of buffered audio (was 2.5s), a rebuffer
+            // resumes after 3s (was 5s), and up to 2 minutes is buffered ahead so
+            // mobile-data blips mid-song do not stall playback.
+            .setLoadControl(
+                androidx.media3.exoplayer.DefaultLoadControl.Builder()
+                    .setBufferDurationsMs(
+                        /* minBufferMs = */ 20_000,
+                        /* maxBufferMs = */ 120_000,
+                        /* bufferForPlaybackMs = */ 1_500,
+                        /* bufferForPlaybackAfterRebufferMs = */ 3_000
+                    )
+                    .build()
+            )
             .setAudioAttributes(audioAttrs, /* handleAudioFocus= */ true)
             .setHandleAudioBecomingNoisy(true)
             .build()
