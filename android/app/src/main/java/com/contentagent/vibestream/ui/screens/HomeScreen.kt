@@ -3,6 +3,7 @@ package com.contentagent.vibestream.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -387,17 +388,21 @@ fun HomeScreen(
                         )
                     }
 
-                    // Real-time Search Suggestions / Autocomplete Recommendations
+                    // Real-time Search Suggestions / Autocomplete Recommendations.
+                    // While suggesting, the list owns the space above the mini player
+                    // and scrolls, so every row stays tappable with the keyboard open
+                    // (2026-11-18 layout fix); the rest of the tab returns on search.
                     if (showSuggestions && searchSuggestions.isNotEmpty()) {
                         Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .weight(1f)
                                 .padding(horizontal = 16.dp, vertical = 2.dp),
                             shape = RoundedCornerShape(12.dp),
                             color = DarkSurfaceElevated,
                             border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(DarkSurfaceBorder))
                         ) {
-                            Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                            Column(modifier = Modifier.verticalScroll(rememberScrollState()).padding(vertical = 4.dp)) {
                                 for ((suggestion, isPersonal) in searchSuggestions.take(6)) {
                                     Row(
                                         modifier = Modifier
@@ -434,7 +439,7 @@ fun HomeScreen(
                                 }
                             }
                         }
-                    }
+                    } else {
 
                     // Quick Genre Chips
                     Row(
@@ -610,6 +615,7 @@ fun HomeScreen(
                             }
                           }
                         }
+                    }
                     }
                 }
             } else if (selectedTab == 2) {
