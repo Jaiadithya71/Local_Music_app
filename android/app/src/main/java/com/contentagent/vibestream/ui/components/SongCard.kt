@@ -43,26 +43,18 @@ fun SongCard(
     onDeleteClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    Card(
+    // Flat list row (the list pattern of the leading players): no card
+    // chrome or borders; the row itself ripples, and the current song is
+    // marked by colour and a wash, not an outline.
+    Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable { onPlayClick() },
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isCurrentSong) DarkSurfaceElevated else MaterialTheme.colorScheme.surface
-        ),
-        border = if (isCurrentSong) {
-            CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(AmberOrange))
-        } else {
-            CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(DarkSurfaceBorder))
-        }
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (isCurrentSong) DarkSurfaceElevated else Color.Transparent)
+            .clickable { onPlayClick() }
+            .padding(horizontal = 6.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
             // Thumbnail
             Box(
                 modifier = Modifier
@@ -189,6 +181,5 @@ fun SongCard(
                     }
                 }
             }
-        }
     }
 }
