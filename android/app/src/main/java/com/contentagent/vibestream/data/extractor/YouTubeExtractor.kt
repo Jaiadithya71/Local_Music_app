@@ -410,7 +410,10 @@ class YouTubeExtractor {
     suspend fun getSearchSuggestions(query: String): List<String> = withContext(Dispatchers.IO) {
         if (query.trim().isEmpty()) return@withContext emptyList<String>()
         val encoded = java.net.URLEncoder.encode(query.trim(), "UTF-8")
-        val url = "https://suggestqueries-clients6.youtube.com/complete/search?client=firefox&ds=yt&q=$encoded"
+        // suggestqueries-clients6.youtube.com now answers 400; the google.com host
+        // is the one that still returns the JSON [query, [suggestions...]] shape
+        // (verified 2026-11-18). This endpoint is how NewPipe/YouTube suggest works.
+        val url = "https://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q=$encoded"
         try {
             val request = Request.Builder()
                 .url(url)
