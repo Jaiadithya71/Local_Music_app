@@ -208,7 +208,34 @@ fun PlaylistDetail(
                                 else -> Icon(Icons.Default.Download, "Download: ${song.title}", tint = AmberOrange)
                             }
                         }
-                        IconButton(onClick = { onRemove(song.id) }) { Icon(Icons.Default.Close, "Remove: ${song.title}", tint = TextSecondary) }
+                        // Remove lives behind an overflow menu plus a confirm, so a
+                        // stray tap can never drop a song (Jai's 2026-11-18 ask).
+                        var menuOpen by remember(song.id) { mutableStateOf(false) }
+                        var confirmRemove by remember(song.id) { mutableStateOf(false) }
+                        Box {
+                            IconButton(onClick = { menuOpen = true }) { Icon(Icons.Default.MoreVert, "Options: ${song.title}", tint = TextSecondary) }
+                            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                                DropdownMenuItem(
+                                    text = { Text("Remove from playlist") },
+                                    onClick = { menuOpen = false; confirmRemove = true }
+                                )
+                            }
+                        }
+                        if (confirmRemove) {
+                            AlertDialog(
+                                onDismissRequest = { confirmRemove = false },
+                                title = { Text("Remove song?") },
+                                text = { Text("Remove \"${song.title}\" from ${playlist.name}?") },
+                                confirmButton = {
+                                    TextButton(onClick = { confirmRemove = false; onRemove(song.id) }) {
+                                        Text("Remove", color = MaterialTheme.colorScheme.error)
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { confirmRemove = false }) { Text("Cancel") }
+                                }
+                            )
+                        }
                     }
                     val progress = downloadProgress[song.id]
                     val status = when {
