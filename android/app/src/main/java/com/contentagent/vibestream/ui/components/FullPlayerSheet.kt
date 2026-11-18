@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package com.contentagent.vibestream.ui.components
 
 import androidx.compose.animation.animateColorAsState
