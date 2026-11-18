@@ -1,6 +1,8 @@
 package com.contentagent.vibestream.ui.components
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -14,14 +16,17 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.imageLoader
 import com.contentagent.vibestream.data.model.Song
 import com.contentagent.vibestream.ui.theme.*
 
@@ -69,7 +74,7 @@ fun FullPlayerSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = DarkBackground,
+        containerColor = Color.Transparent,
         dragHandle = {
             BottomSheetDefaults.DragHandle(
                 color = DarkSurfaceBorder,
@@ -77,6 +82,17 @@ fun FullPlayerSheet(
             )
         }
     ) {
+        // Spotify-style backdrop: a vertical wash from the artwork's dominant
+        // colour into the app's dark base, crossfading as the song changes.
+        val context = LocalContext.current
+        var artColor by remember(song.id) { mutableStateOf<Color?>(null) }
+        LaunchedEffect(song.id) { artColor = extractArtworkColor(context, song) }
+        val gradientTop by animateColorAsState(targetValue = artColor ?: DarkSurfaceElevated, label = "artworkTint")
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Brush.verticalGradient(listOf(gradientTop, DarkBackground, DarkBackground)))
+        ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -122,8 +138,8 @@ fun FullPlayerSheet(
                         color = TextPrimary,
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
+                        maxLines = 1,
+                        modifier = Modifier.basicMarquee()
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
@@ -392,6 +408,7 @@ fun FullPlayerSheet(
                 }
             }
         }
+        }
     }
 }
 
@@ -402,3 +419,26 @@ private fun formatMs(milliseconds: Long): String {
     val seconds = totalSeconds % 60
     return "$minutes:${seconds.toString().padStart(2, '0')}"
 }
+
+/**
+ * Dominant colour of the song's artwork, darkened toward the app base so the
+ * title stays readable over it. Returns null on any failure; callers fall back
+ * to the neutral surface colour.
+ */
+private suspend fun extractArtworkColor(context: android.content.Context, song: Song): Color? =
+    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        try {
+            val thumb = song.thumbnailUrl.ifEmpty { "https://i.ytimg.com/vi/${song.id}/hqdefault.jpg" }
+            if (thumb.isEmpty()) return@withContext null
+            val request = coil.request.ImageRequest.Builder(context).data(thumb).allowHardware(false).build()
+            val bitmap = (context.imageLoader.execute(request).drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
+                ?: return@withContext null
+            val palette = androidx.palette.graphics.Palette.from(bitmap).generate()
+            val swatch = palette.darkVibrantSwatch ?: palette.vibrantSwatch ?: palette.dominantSwatch
+                ?: return@withContext null
+            val c = Color(swatch.rgb)
+            Color(c.red * 0.6f, c.green * 0.6f, c.blue * 0.6f, 1f)
+        } catch (e: Exception) {
+            null
+        }
+    }
