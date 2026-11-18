@@ -735,6 +735,10 @@ class MusicPlayerController(
                     } else {
                         _isBuffering.value = false
                         _errorMessage.value = "Unable to fetch audio stream: ${extractor.lastResolveError ?: "unknown"}"
+                        // Do not leave the previous song primed under this
+                        // song's title; a later play tap must re-resolve, not
+                        // resume the stale item.
+                        controller?.let { it.stop(); it.clearMediaItems() }
                         return@launch
                     }
                 }
@@ -767,6 +771,14 @@ class MusicPlayerController(
         if ((c == null || c.mediaItemCount == 0) && _currentSong.value != null) {
             // Restored queue that was never loaded into the player: start it.
             startPlayback(_currentSong.value!!)
+            return
+        }
+        // The player must hold the song the UI shows. When a resolve fails the
+        // previous track's item stays loaded; a play tap must re-resolve the
+        // shown song, never resurrect the previous track under its title.
+        val shown = _currentSong.value
+        if (c != null && shown != null && c.currentMediaItem?.mediaId != shown.id) {
+            startPlayback(shown)
             return
         }
         if (c?.isPlaying == true) {
