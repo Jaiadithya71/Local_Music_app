@@ -1,5 +1,6 @@
 package com.contentagent.vibestream.player
 
+import android.app.PendingIntent
 import android.content.Intent
 import android.os.Bundle
 import androidx.media3.common.Player
@@ -206,8 +207,18 @@ class PlaybackService : MediaSessionService() {
                 if (exo.currentMediaItemIndex > 0) super.seekToPreviousMediaItem() else previousHandler?.invoke()
             }
         }
+        // Tapping the media notification (and the status-bar media capsule /
+        // "floating island" on MIUI/HyperOS) opens the app, per Jai's ask
+        // (2026-11-18). Without a session activity the tap does nothing.
+        val openApp = PendingIntent.getActivity(
+            this, 0,
+            Intent(this, com.contentagent.vibestream.MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
         val session = MediaSession.Builder(this, player)
             .setCallback(sessionCallback)
+            .setSessionActivity(openApp)
             .build()
         mediaSession = session
         refreshButtons = { updateCustomLayout() }
