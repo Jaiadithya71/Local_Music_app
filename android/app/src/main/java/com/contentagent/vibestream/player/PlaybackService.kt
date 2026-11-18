@@ -218,6 +218,15 @@ class PlaybackService : MediaSessionService() {
         return mediaSession
     }
 
+    // Closing the app (recents swipe or the phone's floating-window close) removes
+    // the task; Jai asked (2026-11-18) for that to stop the music. Screen-off and
+    // Home-button background playback are unaffected: this only fires on task
+    // removal. The saved queue/history restore when the app is reopened.
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        mediaSession?.player?.pause()
+        stopSelf()
+    }
+
     override fun onDestroy() {
         mediaSession?.run {
             player.release()
