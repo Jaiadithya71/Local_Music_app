@@ -66,6 +66,46 @@ fun CategoryTiles(onPick: (String) -> Unit) {
     }
 }
 
+/**
+ * 2x2 artwork mosaic for a playlist, built from the first four song
+ * thumbnails (the library pattern of the leading players, re-written in our
+ * own code). Falls back to a tinted tile with a note icon when the playlist
+ * has too little artwork.
+ */
+@Composable
+private fun PlaylistMosaic(songs: List<Song>, size: androidx.compose.ui.unit.Dp) {
+    val thumbs = songs.map { it.thumbnailUrl.ifEmpty { "https://i.ytimg.com/vi/${it.id}/hqdefault.jpg" } }.distinct().take(4)
+    Box(modifier = Modifier.size(size).clip(RoundedCornerShape(8.dp)).background(DarkSurfaceElevated)) {
+        if (thumbs.size >= 4) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                for (row in 0..1) {
+                    Row(modifier = Modifier.weight(1f)) {
+                        for (col in 0..1) {
+                            AsyncImage(
+                                model = thumbs[row * 2 + col],
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.weight(1f).aspectRatio(1f)
+                            )
+                        }
+                    }
+                }
+            }
+        } else if (thumbs.isNotEmpty()) {
+            AsyncImage(
+                model = thumbs.first(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Icon(Icons.Default.QueueMusic, contentDescription = null, tint = AmberOrange)
+            }
+        }
+    }
+}
+
 @Composable
 private fun SongRow(song: Song, active: Boolean, onClick: () -> Unit, trailing: (@Composable () -> Unit)? = null) {
     Row(
@@ -76,7 +116,7 @@ private fun SongRow(song: Song, active: Boolean, onClick: () -> Unit, trailing: 
             model = song.thumbnailUrl.ifEmpty { "https://i.ytimg.com/vi/${song.id}/hqdefault.jpg" },
             contentDescription = null,
             contentScale = ContentScale.Crop,
-            modifier = Modifier.size(52.dp).clip(RoundedCornerShape(4.dp))
+            modifier = Modifier.size(52.dp).clip(RoundedCornerShape(8.dp))
         )
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
@@ -124,10 +164,24 @@ fun LibrarySection(
                 )
             } else {
                 Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-                    TextButton(onClick = { showNew = true }) {
-                        Icon(Icons.Default.Add, contentDescription = null, tint = AmberOrange)
-                        Spacer(Modifier.width(6.dp))
-                        Text("New playlist", color = AmberOrange)
+                    Text(
+                        "Playlists", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 18.sp,
+                        modifier = Modifier.padding(vertical = 12.dp)
+                    )
+                    // "New playlist" sits in the list as its own row, like the
+                    // leading players, instead of a floating text button.
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { showNew = true }.padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier.size(56.dp).clip(RoundedCornerShape(8.dp)).background(DarkSurfaceElevated),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, tint = AmberOrange)
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Text("New playlist", color = TextPrimary, fontWeight = FontWeight.Medium)
                     }
                     if (playlists.isEmpty()) {
                         Text("No playlists yet.", color = TextTertiary, modifier = Modifier.padding(16.dp))
@@ -135,13 +189,13 @@ fun LibrarySection(
                     LazyColumn {
                         items(playlists, key = { it.name }) { p ->
                             Row(
-                                modifier = Modifier.fillMaxWidth().clickable { openPlaylist = p.name }.padding(vertical = 12.dp),
+                                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { openPlaylist = p.name }.padding(vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(Icons.Default.QueueMusic, contentDescription = null, tint = AmberOrange)
+                                PlaylistMosaic(p.songs, 56.dp)
                                 Spacer(Modifier.width(12.dp))
                                 Column {
-                                    Text(p.name, color = TextPrimary, fontWeight = FontWeight.Medium)
+                                    Text(p.name, color = TextPrimary, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     Text("${p.songs.size} songs", color = TextSecondary, fontSize = 12.sp)
                                 }
                             }
@@ -176,7 +230,7 @@ fun PlaylistDetail(
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back", tint = TextPrimary) }
-            Text(playlist.name, color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 18.sp,
+            Text(playlist.name, color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 20.sp,
                 maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, "Delete playlist", tint = TextSecondary) }
         }
@@ -290,12 +344,32 @@ fun AddToPlaylistDialog(library: LibraryStore, song: Song, onDismiss: () -> Unit
         title = { Text("Add to playlist", color = TextPrimary) },
         text = {
             Column {
-                TextButton(onClick = { showNew = true }) { Text("+ New playlist", color = AmberOrange) }
+                Row(
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { showNew = true }.padding(vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier.size(44.dp).clip(RoundedCornerShape(6.dp)).background(DarkSurface),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, tint = AmberOrange, modifier = Modifier.size(20.dp))
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Text("New playlist", color = AmberOrange, fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                }
+                Spacer(Modifier.height(4.dp))
                 for (p in playlists) {
-                    Text(
-                        p.name, color = TextPrimary,
-                        modifier = Modifier.fillMaxWidth().clickable { library.addToPlaylist(p.name, song); onDismiss() }.padding(vertical = 10.dp)
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { library.addToPlaylist(p.name, song); onDismiss() }.padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        PlaylistMosaic(p.songs, 44.dp)
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text(p.name, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text("${p.songs.size} songs", color = TextSecondary, fontSize = 12.sp)
+                        }
+                    }
                 }
             }
         },
@@ -317,14 +391,21 @@ fun QueueDialog(queue: List<Song>, index: Int, onPick: (Int) -> Unit, onDismiss:
             LazyColumn(modifier = Modifier.heightIn(max = 420.dp)) {
                 itemsIndexed(queue) { i, s ->
                     Row(
-                        modifier = Modifier.fillMaxWidth().clickable { onPick(i) }.padding(vertical = 8.dp),
+                        modifier = Modifier.fillMaxWidth().clickable { onPick(i) }.padding(vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
                             if (i == index) "▶" else "${i + 1}",
                             color = if (i == index) AmberOrange else TextTertiary,
-                            modifier = Modifier.width(28.dp), fontSize = 12.sp
+                            modifier = Modifier.width(24.dp), fontSize = 12.sp
                         )
+                        AsyncImage(
+                            model = s.thumbnailUrl.ifEmpty { "https://i.ytimg.com/vi/${s.id}/hqdefault.jpg" },
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.size(40.dp).clip(RoundedCornerShape(6.dp))
+                        )
+                        Spacer(Modifier.width(10.dp))
                         Column {
                             Text(s.title, color = if (i == index) AmberOrange else TextPrimary, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(s.artist, color = TextSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
