@@ -423,7 +423,7 @@ fun HomeShelves(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(4 * 64.dp + 3 * 8.dp)
+                            .height(64.dp * 4 + 8.dp * 3)
                     ) {
                         gridItems(recent.take(16), key = { it.id }) { song ->
                             Row(
