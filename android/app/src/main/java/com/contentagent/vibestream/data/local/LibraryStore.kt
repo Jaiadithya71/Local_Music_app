@@ -21,6 +21,20 @@ class LibraryStore(context: Context) {
     private val _recent = MutableStateFlow<List<Song>>(load<Song>("recent"))
     val recent: StateFlow<List<Song>> = _recent.asStateFlow()
 
+    // Searches he actually ran, newest first. Powers the personal suggestions
+    // shown above the general YouTube ones while typing (2026-11-18 ask).
+    private val _recentSearches = MutableStateFlow(load<String>("recent_searches").take(20))
+    val recentSearches: StateFlow<List<String>> = _recentSearches.asStateFlow()
+
+    /** Remember a performed search: deduped case-insensitively, capped at 20. */
+    fun recordSearch(query: String) {
+        val q = query.trim()
+        if (q.isEmpty()) return
+        val list = listOf(q) + _recentSearches.value.filter { !it.equals(q, ignoreCase = true) }
+        _recentSearches.value = list.take(20)
+        save("recent_searches", _recentSearches.value)
+    }
+
     private val _playlists = MutableStateFlow<List<Playlist>>(load<Playlist>("playlists"))
     val playlists: StateFlow<List<Playlist>> = _playlists.asStateFlow()
 
