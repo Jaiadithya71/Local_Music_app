@@ -91,6 +91,8 @@ dependencies {
 
     // Image loading
     implementation("io.coil-kt:coil-compose:2.6.0")
+    // Artwork-derived colours for the Now Playing backdrop (Apache-2.0).
+    implementation("androidx.palette:palette:1.0.0")
 
     // Media3 / ExoPlayer for streaming and local audio playback
     implementation("androidx.media3:media3-exoplayer:1.2.1")
