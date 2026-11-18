@@ -5,6 +5,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyHorizontalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -401,30 +404,51 @@ fun HomeShelves(
         }
         if (recent.isNotEmpty()) {
             item {
-                Column(modifier = Modifier.padding(top = 16.dp)) {
+                Column(modifier = Modifier.padding(top = 20.dp)) {
                     Text(
                         text = "Recently played",
-                        style = MaterialTheme.typography.titleMedium,
                         color = TextPrimary,
+                        fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                        modifier = Modifier.padding(horizontal = 16.dp)
                     )
-                    LazyRow(
+                    Spacer(Modifier.height(10.dp))
+                    // 4-row grid of compact rows (the "quick picks" pattern from
+                    // leading open players, re-written in our own code): denser
+                    // and faster to scan than a row of wide cards.
+                    LazyHorizontalGrid(
+                        rows = GridCells.Fixed(4),
                         contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(4 * 64.dp + 3 * 8.dp)
                     ) {
-                        items(recent.take(12), key = { it.id }) { song ->
-                            Column(modifier = Modifier.width(140.dp).clickable { onPlay(song, recent) }) {
+                        gridItems(recent.take(16), key = { it.id }) { song ->
+                            Row(
+                                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .width(250.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { onPlay(song, recent) }
+                            ) {
                                 AsyncImage(
                                     model = song.thumbnailUrl.ifEmpty { "https://i.ytimg.com/vi/${song.id}/hqdefault.jpg" },
                                     contentDescription = song.title,
                                     contentScale = ContentScale.Crop,
-                                    modifier = Modifier.size(140.dp).clip(RoundedCornerShape(6.dp))
+                                    modifier = Modifier
+                                        .size(56.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(DarkSurfaceElevated)
                                 )
-                                Spacer(Modifier.height(6.dp))
-                                Text(song.title, color = if (song.id == currentSongId) AmberOrange else TextPrimary,
-                                    fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                Text(song.artist, color = TextSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Spacer(Modifier.width(10.dp))
+                                Column {
+                                    Text(song.title, color = if (song.id == currentSongId) AmberOrange else TextPrimary,
+                                        fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(song.artist, color = TextSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
                             }
                         }
                     }
@@ -436,16 +460,15 @@ fun HomeShelves(
                 else ShelfCache.data[cacheKey(query, musicOnly)]
             val songs = base?.let { DiscoveryPolicy.fresh(it, known, skippedArtists, limit = it.size, musicOnly = musicOnly) }
             val failed = ShelfCache.failed[cacheKey(query, musicOnly)] == true
-            Column(modifier = Modifier.padding(top = 16.dp)) {
+            Column(modifier = Modifier.padding(top = 20.dp)) {
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.titleMedium,
                     color = TextPrimary,
+                    fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-
+                    modifier = Modifier.padding(horizontal = 16.dp)
                 )
+                Spacer(Modifier.height(10.dp))
                 val list = songs
                 if (list == null) {
                     Box(modifier = Modifier.fillMaxWidth().height(150.dp), contentAlignment = androidx.compose.ui.Alignment.Center) {
@@ -472,11 +495,11 @@ fun HomeShelves(
                                 modifier = Modifier.width(140.dp).clickable { onPlay(song, list) }
                             ) {
                                 ShelfArtwork(song)
-                                Spacer(Modifier.height(6.dp))
+                                Spacer(Modifier.height(8.dp))
                                 Text(
                                     song.title,
                                     color = if (song.id == currentSongId) AmberOrange else TextPrimary,
-                                    fontSize = 13.sp,
+                                    fontSize = 14.sp,
                                     fontWeight = FontWeight.Medium,
                                     maxLines = 2,
                                     overflow = TextOverflow.Ellipsis
@@ -527,7 +550,7 @@ fun HomeShelves(
 @Composable
 private fun ShelfArtwork(song: Song) {
     var failed by remember(song.id, song.thumbnailUrl) { mutableStateOf(false) }
-    Box(modifier = Modifier.size(140.dp).clip(RoundedCornerShape(6.dp)).background(DarkSurfaceElevated),
+    Box(modifier = Modifier.size(140.dp).clip(RoundedCornerShape(8.dp)).background(DarkSurfaceElevated),
         contentAlignment = androidx.compose.ui.Alignment.Center) {
         Text("♪", color = TextSecondary, fontSize = 32.sp)
         AsyncImage(
