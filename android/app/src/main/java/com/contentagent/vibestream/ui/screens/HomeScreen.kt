@@ -65,21 +65,35 @@ fun HomeScreen(
     var isSearching by remember { mutableStateOf(false) }
     var searchResults by remember { mutableStateOf<List<Song>>(emptyList()) }
     var searchError by remember { mutableStateOf<String?>(null) }
-    var searchSuggestions by remember { mutableStateOf<List<String>>(emptyList()) }
+    // (text, isPersonal): his own searches/plays come first, general feed after.
+    var searchSuggestions by remember { mutableStateOf<List<Pair<String, Boolean>>>(emptyList()) }
     var showSuggestions by remember { mutableStateOf(false) }
     var isPlayerSheetVisible by remember { mutableStateOf(false) }
 
-    // Real-time search recommendation autocomplete as user types
+    // Real-time search recommendation autocomplete as user types.
+    // Personal suggestions (his past searches and played songs matching what he
+    // typed, 2026-11-18 ask) lead; the general YouTube feed fills the rest.
     LaunchedEffect(searchQuery) {
-        if (searchQuery.trim().length >= 2) {
+        val q = searchQuery.trim()
+        if (q.length >= 2) {
             kotlinx.coroutines.delay(220) // Debounce typing
-            try {
-                searchSuggestions = extractor.getSearchSuggestions(searchQuery.trim())
-                showSuggestions = searchSuggestions.isNotEmpty()
+            val lower = q.lowercase()
+            val fromSearches = library.recentSearches.value
+                .filter { it.lowercase().contains(lower) }
+                .take(3)
+            val fromPlays = library.recent.value
+                .filter { it.title.lowercase().contains(lower) || it.artist.lowercase().contains(lower) }
+                .take(3)
+                .map { song -> listOf(song.title, song.artist).filter { it.isNotBlank() }.joinToString(" ") }
+            val personal = (fromSearches + fromPlays).distinctBy { it.lowercase() }
+            val general = try {
+                extractor.getSearchSuggestions(q)
+                    .filter { g -> personal.none { it.equals(g, ignoreCase = true) } }
             } catch (e: Exception) {
-                searchSuggestions = emptyList()
-                showSuggestions = false
+                emptyList()
             }
+            searchSuggestions = personal.map { it to true } + general.map { it to false }
+            showSuggestions = searchSuggestions.isNotEmpty()
         } else {
             searchSuggestions = emptyList()
             showSuggestions = false
@@ -177,6 +191,7 @@ fun HomeScreen(
 
     fun performSearch(query: String) {
         if (query.isBlank()) return
+        library.recordSearch(query)
         focusManager.clearFocus()
         showSuggestions = false
         isSearching = true
@@ -383,7 +398,7 @@ fun HomeScreen(
                             border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(DarkSurfaceBorder))
                         ) {
                             Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                                for (suggestion in searchSuggestions.take(6)) {
+                                for ((suggestion, isPersonal) in searchSuggestions.take(6)) {
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -396,7 +411,7 @@ fun HomeScreen(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.Search,
+                                            imageVector = if (isPersonal) Icons.Default.History else Icons.Default.Search,
                                             contentDescription = null,
                                             tint = TextTertiary,
                                             modifier = Modifier.size(18.dp)
