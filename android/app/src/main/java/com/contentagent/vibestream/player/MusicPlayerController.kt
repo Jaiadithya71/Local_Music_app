@@ -414,6 +414,7 @@ class MusicPlayerController(
                     _currentSong.value = q[idx]
                     if (old != idx) {
                         recoveryAttempts = 0
+                        alternateHops = 0
                         urlRefreshAttempted = false
                         pendingCandidates.clear()
                         prefetchAlts.remove(q[idx].id)?.let { pendingCandidates.addAll(it) }
@@ -471,6 +472,44 @@ class MusicPlayerController(
                             c.prepare()
                             c.playWhenReady = wasRequestedToPlay
                             scheduleNextPrefetch()
+                        }
+                    }
+                    return
+                }
+                // Last resort before showing an error: a rejected or dead upload
+                // (HTTP 403, broken link) should not strand the listener. Search
+                // for the same song from another uploader and play the first
+                // alternate that resolves, at most a couple of hops per chain and
+                // never the same failed video twice.
+                if (song != null && !song.isDownloaded && alternateHops < 3 && failedSourceIds.add(song.id)) {
+                    alternateHops++
+                    lastPlayError = describe(error)
+                    playbackGeneration++
+                    val generation = playbackGeneration
+                    _isBuffering.value = true
+                    playerScope.launch {
+                        val alternate = findAlternateSource(song)
+                        if (generation != playbackGeneration || _currentSong.value?.id != song.id) return@launch
+                        if (alternate != null) {
+                            val (altSong, altUrl) = alternate
+                            altSong.streamUrl = altUrl
+                            val q = _queue.value.toMutableList()
+                            val idx = q.indexOfFirst { it.id == song.id }
+                            if (idx >= 0) {
+                                q[idx] = altSong
+                                _queue.value = q
+                            }
+                            _currentSong.value = altSong
+                            controller?.let { c ->
+                                c.setMediaItem(buildItem(altSong, Uri.parse(altUrl)), resumeMs)
+                                c.prepare()
+                                c.playWhenReady = wasRequestedToPlay
+                                scheduleNextPrefetch()
+                            }
+                        } else {
+                            _isBuffering.value = false
+                            _isPlaying.value = false
+                            _errorMessage.value = "Could not play \"${song.title}\": the upload is blocked and no alternate source was found.\n${lastPlayError}"
                         }
                     }
                     return
@@ -550,6 +589,36 @@ class MusicPlayerController(
     // Alternate stream URLs per song id, kept for the onPlayerError fallback when a
     // prefetched item turns out to be a dead link at play time.
     private val prefetchAlts = mutableMapOf<String, List<String>>()
+    // Uploads whose streams were rejected for good this session, and how many
+    // same-song alternate uploads the current recovery chain has walked.
+    private val failedSourceIds = mutableSetOf<String>()
+    private var alternateHops = 0
+
+    /**
+     * Searches YouTube Music for the same song (title + artist) and returns the
+     * first other upload with a resolvable audio stream, skipping uploads that
+     * already failed. Used when the chosen upload's URLs are rejected.
+     */
+    private suspend fun findAlternateSource(song: Song): Pair<Song, String>? {
+        val results = try {
+            extractor.searchSongs("${song.title} ${song.artist}", true)
+        } catch (e: Exception) {
+            return null
+        }
+        for (alt in results) {
+            if (alt.id == song.id || alt.id in failedSourceIds) continue
+            val urls = try {
+                extractor.resolveAudioCandidates(alt.id)
+            } catch (e: Exception) {
+                emptyList()
+            }
+            val url = urls.firstOrNull() ?: continue
+            streamUrlStore?.put(alt.id, urls)
+            prefetchAlts[alt.id] = urls.drop(1).take(4)
+            return alt to url
+        }
+        return null
+    }
 
     /**
      * Resolves the upcoming track's stream in the background and appends it to the
