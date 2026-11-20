@@ -32,11 +32,15 @@ import androidx.compose.ui.unit.sp
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import com.contentagent.vibestream.data.extractor.YouTubeExtractor
+import com.contentagent.vibestream.data.auth.YtMusicAuth
 import com.contentagent.vibestream.data.local.DownloadManager
 import com.contentagent.vibestream.data.local.LibraryBackup
 import com.contentagent.vibestream.data.local.OfflineStorage
 import com.contentagent.vibestream.data.lyrics.LyricsRepository
 import com.contentagent.vibestream.data.model.Song
+import com.contentagent.vibestream.data.model.ArtistPage
+import com.contentagent.vibestream.data.model.SearchEntry
+import com.contentagent.vibestream.data.model.SearchSections
 import com.contentagent.vibestream.player.EqualizerManager
 import com.contentagent.vibestream.player.MusicPlayerController
 import com.contentagent.vibestream.player.PlaybackService
@@ -67,6 +71,14 @@ fun HomeScreen(
     var isSearching by remember { mutableStateOf(false) }
     var searchResults by remember { mutableStateOf<List<Song>>(emptyList()) }
     var searchError by remember { mutableStateOf<String?>(null) }
+    var searchSections by remember { mutableStateOf<SearchSections?>(null) }
+    var sectionChip by remember { mutableStateOf("all") }
+    var openedEntry by remember { mutableStateOf<SearchEntry?>(null) }
+    var openedAlbumTracks by remember { mutableStateOf<List<Song>>(emptyList()) }
+    var openedArtistPage by remember { mutableStateOf<ArtistPage?>(null) }
+    var entryLoading by remember { mutableStateOf(false) }
+    var showYtmSignIn by remember { mutableStateOf(false) }
+    var ytmSignedIn by remember { mutableStateOf(YtMusicAuth.isSignedIn()) }
     // (text, isPersonal): his own searches/plays come first, general feed after.
     var searchSuggestions by remember { mutableStateOf<List<Pair<String, Boolean>>>(emptyList()) }
     var showSuggestions by remember { mutableStateOf(false) }
@@ -202,7 +214,11 @@ fun HomeScreen(
 
         coroutineScope.launch {
             try {
-                val results = extractor.searchSongs(query, musicOnly)
+                val sec = extractor.searchSectioned(query, musicOnly)
+                searchSections = sec
+                sectionChip = "all"
+                openedEntry = null
+                val results = sec.playable
                 searchResults = results
                 if (results.isEmpty()) {
                     searchError = "No songs found for '$query'. Try another search term."
@@ -220,6 +236,24 @@ fun HomeScreen(
             } finally {
                 isSearching = false
             }
+        }
+    }
+
+    fun openEntryHandler(entry: SearchEntry) {
+        openedEntry = entry
+        entryLoading = true
+        openedAlbumTracks = emptyList()
+        openedArtistPage = null
+        coroutineScope.launch {
+            try {
+                when (entry.kind) {
+                    "artist" -> openedArtistPage = extractor.browseArtist(entry.id)
+                    else -> openedAlbumTracks = extractor.browseAlbumTracks(entry.id)
+                }
+            } catch (e: Exception) {
+                // The page still opens with its header if the browse fails.
+            }
+            entryLoading = false
         }
     }
 
@@ -326,7 +360,13 @@ fun HomeScreen(
             }
 
 
-            if (selectedTab == 1) {
+            if (showYtmSignIn) {
+                YtMusicSignInScreen(onDone = {
+                    showYtmSignIn = false
+                    ytmSignedIn = YtMusicAuth.isSignedIn()
+                    extractor.authRejected = false
+                })
+            } else if (selectedTab == 1) {
                 // DISCOVER TAB
                 Column(modifier = Modifier.fillMaxSize()) {
                     // Search Bar
@@ -525,99 +565,60 @@ fun HomeScreen(
                             CategoryTiles(onPick = { q -> searchQuery = q; performSearch(q) })
                         }
                         else -> {
-                          val filtered = when (resultFilter) {
-                              "song" -> searchResults.filter { it.kind == "song" }
-                              "video" -> searchResults.filter { it.kind == "video" }
-                              else -> searchResults
-                          }
+                          val open = openedEntry
                           Column(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                            LazyColumn(
-                                modifier = Modifier.fillMaxWidth().weight(1f),
-                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                                verticalArrangement = Arrangement.spacedBy(2.dp)
-                            ) {
-                                // Spotify-style top result hero
-                                item {
-                                    val top = searchResults.first()
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .background(DarkSurfaceElevated)
-                                            .clickable { playerController.playSong(top, searchResults) }
-                                            .padding(12.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        AsyncImage(
-                                            model = top.thumbnailUrl.ifEmpty { "https://i.ytimg.com/vi/${top.id}/hqdefault.jpg" },
-                                            contentDescription = top.title,
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier.size(96.dp).clip(RoundedCornerShape(8.dp))
-                                        )
-                                        Spacer(Modifier.width(12.dp))
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text("Top result", color = TextTertiary, fontSize = 11.sp)
-                                            Text(
-                                                top.title, color = TextPrimary, fontSize = 15.sp,
-                                                fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis
-                                            )
-                                            Text(
-                                                top.artist, color = TextSecondary, fontSize = 13.sp,
-                                                maxLines = 1, overflow = TextOverflow.Ellipsis
-                                            )
-                                        }
-                                        Icon(
-                                            Icons.Default.PlayCircle,
-                                            contentDescription = "Play",
-                                            tint = AmberOrange,
-                                            modifier = Modifier.size(40.dp)
-                                        )
-                                    }
+                            when {
+                              open != null && open.kind == "artist" -> {
+                                ArtistPageView(
+                                  page = openedArtistPage,
+                                  loading = entryLoading,
+                                  currentSongId = currentSong?.id,
+                                  isPlaying = isPlaying,
+                                  isDownloaded = { offlineStorage.isDownloaded(it) },
+                                  isDownloading = { downloadManager.isDownloading(it) },
+                                  downloadProgress = { downloadProgressMap[it] ?: 0f },
+                                  onPlay = { sg, ctx -> playerController.playSong(if (offlineStorage.isDownloaded(sg.id)) (offlineStorage.getLocalSong(sg.id) ?: sg) else sg, ctx) },
+                                  onPlayAll = { list -> list.firstOrNull()?.let { playerController.playSong(it, list) } },
+                                  onDownload = { sg -> coroutineScope.launch { downloadManager.downloadTrack(sg) } },
+                                  onOpenEntry = { openEntryHandler(it) },
+                                  onBack = { openedEntry = null }
+                                )
+                              }
+                              open != null -> {
+                                AlbumPageView(
+                                  entry = open,
+                                  tracks = openedAlbumTracks,
+                                  loading = entryLoading,
+                                  currentSongId = currentSong?.id,
+                                  isPlaying = isPlaying,
+                                  isDownloaded = { offlineStorage.isDownloaded(it) },
+                                  isDownloading = { downloadManager.isDownloading(it) },
+                                  downloadProgress = { downloadProgressMap[it] ?: 0f },
+                                  onPlay = { sg, ctx -> playerController.playSong(if (offlineStorage.isDownloaded(sg.id)) (offlineStorage.getLocalSong(sg.id) ?: sg) else sg, ctx) },
+                                  onPlayAll = { list -> list.firstOrNull()?.let { playerController.playSong(it, list) } },
+                                  onShuffle = { list -> if (list.isNotEmpty()) { val sh = list.shuffled(); playerController.playSong(sh.first(), sh) } },
+                                  onDownload = { sg -> coroutineScope.launch { downloadManager.downloadTrack(sg) } },
+                                  onBack = { openedEntry = null }
+                                )
+                              }
+                              else -> {
+                                val sec = searchSections
+                                if (sec != null) {
+                                  SectionedSearchResults(
+                                    sections = sec,
+                                    activeChip = sectionChip,
+                                    onChip = { sectionChip = it },
+                                    currentSongId = currentSong?.id,
+                                    isPlaying = isPlaying,
+                                    isDownloaded = { offlineStorage.isDownloaded(it) },
+                                    isDownloading = { downloadManager.isDownloading(it) },
+                                    downloadProgress = { downloadProgressMap[it] ?: 0f },
+                                    onPlay = { sg, ctx -> playerController.playSong(if (offlineStorage.isDownloaded(sg.id)) (offlineStorage.getLocalSong(sg.id) ?: sg) else sg, ctx) },
+                                    onDownload = { sg -> coroutineScope.launch { downloadManager.downloadTrack(sg) } },
+                                    onOpenEntry = { openEntryHandler(it) }
+                                  )
                                 }
-                                // Type filter chips (Songs = YouTube Music, Videos = YouTube-wide)
-                                item {
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        for ((key, label) in listOf("all" to "All", "song" to "Songs", "video" to "Videos")) {
-                                            FilterChip(
-                                                selected = resultFilter == key,
-                                                onClick = { resultFilter = key },
-                                                label = { Text(label, fontSize = 12.sp) },
-                                                colors = FilterChipDefaults.filterChipColors(
-                                                    containerColor = DarkSurfaceElevated,
-                                                    labelColor = TextSecondary,
-                                                    selectedContainerColor = AmberOrange,
-                                                    selectedLabelColor = DarkBackground
-                                                )
-                                            )
-                                        }
-                                    }
-                                }
-                                items(filtered, key = { it.id }) { song ->
-                                    val isCurrent = currentSong?.id == song.id
-                                    val isDownloaded = offlineStorage.isDownloaded(song.id)
-                                    val isDownloading = downloadManager.isDownloading(song.id)
-                                    val progress = downloadProgressMap[song.id] ?: 0f
-
-                                    // If already downloaded locally, use the local song version with stored path
-                                    val activeSong = if (isDownloaded) (offlineStorage.getLocalSong(song.id) ?: song) else song
-
-                                    SongCard(
-                                        song = activeSong,
-                                        isCurrentSong = isCurrent,
-                                        isPlaying = isCurrent && isPlaying,
-                                        isDownloading = isDownloading,
-                                        downloadProgress = progress,
-                                        isDownloaded = isDownloaded,
-                                        onPlayClick = {
-                                            playerController.playSong(activeSong, searchResults)
-                                        },
-                                        onDownloadClick = {
-                                            coroutineScope.launch {
-                                                downloadManager.downloadTrack(song)
-                                            }
-                                        }
-                                    )
-                                }
+                              }
                             }
                           }
                         }
@@ -626,6 +627,43 @@ fun HomeScreen(
                 }
             } else if (selectedTab == 2) {
               Column(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            if (ytmSignedIn) {
+                                signOutOfYtMusic()
+                                ytmSignedIn = false
+                                extractor.authRejected = false
+                            } else {
+                                showYtmSignIn = true
+                            }
+                        }
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.AccountCircle,
+                        contentDescription = null,
+                        tint = if (ytmSignedIn) AmberOrange else TextSecondary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            if (ytmSignedIn) "YouTube Music signed in" else "Sign in to YouTube Music",
+                            color = TextPrimary,
+                            fontSize = 14.sp
+                        )
+                        Text(
+                            if (extractor.authRejected) "Session expired - tap to sign in again"
+                            else if (ytmSignedIn) "Unofficial integration. Tap to sign out (wipes the session from this device)."
+                            else "Optional. Unofficial integration; the session cookie stays encrypted on this device.",
+                            color = TextSecondary,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()

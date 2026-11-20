@@ -5,6 +5,8 @@ import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.MediaType.Companion.toMediaType
@@ -25,7 +27,338 @@ class YouTubeExtractor {
         .followRedirects(true)
         .build()
 
-    // Resilient public API mirrors for decentralized on-device extraction
+    // ---- Signed-in YouTube Music session (optional) ----
+
+    /** Supplies the current session cookie header, or null when signed out. Wired from MainActivity to YtMusicAuth. */
+    @Volatile var authCookieProvider: (() -> String?)? = null
+
+    /** True after the server rejects our session (expired/revoked cookie); UI can prompt sign-in again. */
+    @Volatile var authRejected: Boolean = false
+
+    private fun sapisidFromCookie(cookie: String): String? {
+        for (part in cookie.split(";")) {
+            val kv = part.trim()
+            if (kv.startsWith("__Secure-3PAPISID=") || kv.startsWith("SAPISID=")) {
+                return kv.substringAfter('=').takeIf { it.isNotBlank() }
+            }
+        }
+        return null
+    }
+
+    /** SAPISIDHASH Authorization header value used by the YouTube Music web client. */
+    internal fun sapisidHash(sapisid: String, timestampSec: Long = System.currentTimeMillis() / 1000): String {
+        val digest = java.security.MessageDigest.getInstance("SHA-1")
+            .digest("$timestampSec $sapisid https://music.youtube.com".toByteArray(Charsets.UTF_8))
+        return "SAPISIDHASH ${timestampSec}_" + digest.joinToString("") { "%02x".format(it) }
+    }
+
+    /** Attaches signed-in headers when a session exists. Returns true when auth was attached. */
+    private fun attachAuth(builder: Request.Builder): Boolean {
+        val cookie = authCookieProvider?.invoke() ?: return false
+        val sapisid = sapisidFromCookie(cookie) ?: return false
+        builder.header("Cookie", cookie)
+        builder.header("Authorization", sapisidHash(sapisid))
+        builder.header("X-Origin", "https://music.youtube.com")
+        builder.header("Referer", "https://music.youtube.com/")
+        return true
+    }
+
+    /**
+     * Executes an InnerTube POST. On 401/403 with auth attached, flags the session
+     * as rejected and retries once anonymously so basic search keeps working.
+     */
+    private fun execOrNull(request: Request, authed: Boolean): String? {
+        return try {
+            client.newCall(request).execute().use { r ->
+                if (r.isSuccessful) {
+                    r.body?.string()
+                } else if ((r.code == 401 || r.code == 403) && authed) {
+                    authRejected = true
+                    val anon = request.newBuilder()
+                        .removeHeader("Cookie")
+                        .removeHeader("Authorization")
+                        .build()
+                    client.newCall(anon).execute().use { r2 ->
+                        if (r2.isSuccessful) r2.body?.string() else null
+                    }
+                } else {
+                    null
+                }
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    // ---- Sectioned search (YouTube Music layout) ----
+
+    private val sectionsCache = object : LinkedHashMap<String, Pair<Long, com.contentagent.vibestream.data.model.SearchSections>>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<Long, com.contentagent.vibestream.data.model.SearchSections>>?) = size > 16
+    }
+
+    /**
+     * Search results grouped like YouTube Music: top result, songs, videos,
+     * albums, artists, playlists. Runs the catalog search and the typed general
+     * search in parallel; 30-minute session cache per query.
+     */
+    suspend fun searchSectioned(query: String, musicOnly: Boolean = true): com.contentagent.vibestream.data.model.SearchSections = withContext(Dispatchers.IO) {
+        if (query.isBlank()) return@withContext com.contentagent.vibestream.data.model.SearchSections(null, emptyList(), emptyList(), emptyList(), emptyList(), emptyList())
+        val key = query.trim().lowercase(java.util.Locale.ROOT) + "|sec|" + musicOnly
+        val now = System.currentTimeMillis()
+        sectionsCache[key]?.let { if (now - it.first < 30 * 60 * 1000L) return@withContext it.second }
+        val sections = coroutineScope {
+            val generalDeferred = async { searchYouTubeMusicGeneral(query) }
+            val songsDeferred = async { searchSongs(query, musicOnly) }
+            val general = generalDeferred.await()
+            val songs = songsDeferred.await()
+            buildSections(general, songs, musicOnly)
+        }
+        if (!sections.isEmpty) sectionsCache[key] = now to sections
+        sections
+    }
+
+    private fun buildSections(
+        general: GeneralSearchParse,
+        songs: List<Song>,
+        musicOnly: Boolean
+    ): com.contentagent.vibestream.data.model.SearchSections {
+        val policy = com.contentagent.vibestream.data.recommendation.MusicSearchPolicy
+        // searchSongs may include augmented YouTube uploads (kind=video) when the
+        // catalog misses the query; those belong in the Videos section.
+        val songItems = (if (musicOnly) songs else policy.songsOnly(general.songs).ifEmpty { songs }).filter { it.kind != "video" }
+        val videos = (songs.filter { it.kind == "video" } + policy.musicVideosOnly(general.videos)).distinctBy { it.id }
+        return com.contentagent.vibestream.data.model.SearchSections(
+            topResult = general.topResult,
+            songs = songItems,
+            videos = videos,
+            albums = general.albums,
+            artists = general.artists,
+            playlists = general.playlists
+        )
+    }
+
+    private class GeneralSearchParse {
+        var topResult: Song? = null
+        val songs = mutableListOf<Song>()
+        val videos = mutableListOf<Song>()
+        val albums = mutableListOf<com.contentagent.vibestream.data.model.SearchEntry>()
+        val artists = mutableListOf<com.contentagent.vibestream.data.model.SearchEntry>()
+        val playlists = mutableListOf<com.contentagent.vibestream.data.model.SearchEntry>()
+    }
+
+    /** General YouTube Music search (no type filter): typed items for every section. */
+    private fun searchYouTubeMusicGeneral(query: String): GeneralSearchParse {
+        val out = GeneralSearchParse()
+        if (query.isBlank()) return out
+        return try {
+            val payload = JsonObject().apply {
+                add("context", JsonObject().apply {
+                    add("client", JsonObject().apply {
+                        addProperty("clientName", "WEB_REMIX")
+                        addProperty("clientVersion", "1.20241016.01.00")
+                        addProperty("hl", "en")
+                        addProperty("gl", "IN")
+                    })
+                })
+                addProperty("query", query.trim())
+            }
+            val builder = Request.Builder()
+                .url("https://music.youtube.com/youtubei/v1/search?prettyPrint=false")
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                .header("Origin", "https://music.youtube.com")
+            val authed = attachAuth(builder)
+            val request = builder
+                .post(payload.toString().toRequestBody("application/json".toMediaType()))
+                .build()
+            val body = execOrNull(request, authed) ?: return out
+            parseGeneralSearch(JsonParser.parseString(body), out)
+            out
+        } catch (e: Exception) {
+            out
+        }
+    }
+
+    private fun runsText(o: JsonObject?, field: String): String =
+        o?.getAsJsonObject(field)?.getAsJsonArray("runs")?.joinToString("") { it.asJsonObject.get("text")?.asString ?: "" } ?: ""
+
+    private fun bestThumbnail(container: JsonObject?, vararg path: String): String {
+        var node = container
+        for (p in path) node = node?.getAsJsonObject(p) ?: return ""
+        val arr = node?.getAsJsonArray("thumbnails") ?: return ""
+        return arr.lastOrNull()?.asJsonObject?.get("url")?.asString ?: ""
+    }
+
+    private fun parseGeneralSearch(el: com.google.gson.JsonElement, out: GeneralSearchParse) {
+        if (el.isJsonArray) {
+            for (e in el.asJsonArray) parseGeneralSearch(e, out)
+            return
+        }
+        if (!el.isJsonObject) return
+        val o = el.asJsonObject
+        val card = o.getAsJsonObject("musicCardShelfRenderer")
+        if (card != null) {
+            val vid = card.getAsJsonObject("onTap")?.getAsJsonObject("watchEndpoint")?.get("videoId")?.asString
+            val title = runsText(card, "title")
+            if (vid != null && title.isNotBlank() && out.topResult == null) {
+                val sub = runsText(card, "subtitle")
+                val parts = sub.split("•").map { it.trim() }
+                val artist = parts.getOrNull(1) ?: ""
+                val durText = parts.lastOrNull { Regex("^\\d+(:\\d{2}){1,2}$").matches(it) } ?: ""
+                val secs = durText.split(":").fold(0L) { n, v -> n * 60 + (v.toLongOrNull() ?: 0) }
+                out.topResult = Song(
+                    id = vid, title = title,
+                    artist = artist.ifBlank { sub },
+                    durationSec = secs, durationText = durText.ifBlank { formatDuration(secs) },
+                    thumbnailUrl = bestThumbnail(card, "thumbnail", "musicThumbnailRenderer", "thumbnail")
+                        .ifEmpty { "https://i.ytimg.com/vi/$vid/hqdefault.jpg" }
+                )
+            }
+        }
+        val r = o.getAsJsonObject("musicResponsiveListItemRenderer")
+        if (r != null) {
+            classifyGeneralItem(r, out)
+        } else {
+            for (e in o.entrySet()) parseGeneralSearch(e.value, out)
+        }
+    }
+
+    private fun classifyGeneralItem(r: JsonObject, out: GeneralSearchParse) {
+        val cols = r.getAsJsonArray("flexColumns") ?: return
+        fun colText(i: Int): String {
+            val col = if (i < cols.size()) cols.get(i).asJsonObject else null
+            val runs = col?.getAsJsonObject("musicResponsiveListItemFlexColumnRenderer")
+                ?.getAsJsonObject("text")?.getAsJsonArray("runs") ?: return ""
+            return runs.joinToString("") { it.asJsonObject.get("text")?.asString ?: "" }
+        }
+        val title = colText(0)
+        if (title.isBlank()) return
+        val sub = colText(1)
+        val type = sub.substringBefore("•").trim()
+        val rest = sub.substringAfter("•", "").trim()
+        val thumb = bestThumbnail(r, "thumbnail", "musicThumbnailRenderer", "thumbnail")
+        val vid = r.getAsJsonObject("playlistItemData")?.get("videoId")?.asString
+            ?: r.getAsJsonObject("navigationEndpoint")?.getAsJsonObject("watchEndpoint")?.get("videoId")?.asString
+        val browse = r.getAsJsonObject("navigationEndpoint")?.getAsJsonObject("browseEndpoint")?.get("browseId")?.asString
+        when (type.lowercase(java.util.Locale.ROOT)) {
+            "song" -> if (vid != null) out.songs.add(Song(vid, title, rest.ifBlank { "Unknown Artist" }, thumbnailUrl = thumb.ifEmpty { "https://i.ytimg.com/vi/$vid/hqdefault.jpg" }))
+            "video" -> if (vid != null) out.videos.add(Song(vid, title, rest.ifBlank { "YouTube" }, thumbnailUrl = thumb.ifEmpty { "https://i.ytimg.com/vi/$vid/hqdefault.jpg" }, kind = "video"))
+            "album", "ep", "single" -> if (browse != null) out.albums.add(com.contentagent.vibestream.data.model.SearchEntry(browse, title, sub, thumb, "album"))
+            "artist" -> if (browse != null) out.artists.add(com.contentagent.vibestream.data.model.SearchEntry(browse, title, sub, thumb, "artist"))
+            "playlist" -> if (browse != null) out.playlists.add(com.contentagent.vibestream.data.model.SearchEntry(browse, title, sub, thumb, "playlist"))
+        }
+    }
+
+    /** Album page: track list for an album browseId (MPREb...). */
+    suspend fun browseAlbumTracks(browseId: String): List<Song> = withContext(Dispatchers.IO) {
+        val body = browse(browseId) ?: return@withContext emptyList()
+        val out = mutableListOf<Song>()
+        collectShelfSongs(JsonParser.parseString(body), out)
+        out.distinctBy { it.id }
+    }
+
+    /** Artist page: name, photo, top songs and album shelf for a channel browseId (UC...). */
+    suspend fun browseArtist(browseId: String): com.contentagent.vibestream.data.model.ArtistPage? = withContext(Dispatchers.IO) {
+        val body = browse(browseId) ?: return@withContext null
+        val root = JsonParser.parseString(body)
+        var name = ""
+        var photo = ""
+        val topSongs = mutableListOf<Song>()
+        val albums = mutableListOf<com.contentagent.vibestream.data.model.SearchEntry>()
+        findArtistHeader(root)?.let { h ->
+            name = runsText(h, "title")
+            photo = bestThumbnail(h, "thumbnail", "musicThumbnailRenderer", "thumbnail")
+        }
+        collectArtistShelves(root, topSongs, albums)
+        if (name.isBlank() && topSongs.isEmpty()) null
+        else com.contentagent.vibestream.data.model.ArtistPage(name, photo, topSongs.distinctBy { it.id }, albums.distinctBy { it.id })
+    }
+
+    private fun browse(browseId: String): String? {
+        if (!Regex("[A-Za-z0-9_-]+").matches(browseId)) return null
+        return try {
+            val payload = JsonObject().apply {
+                add("context", JsonObject().apply {
+                    add("client", JsonObject().apply {
+                        addProperty("clientName", "WEB_REMIX")
+                        addProperty("clientVersion", "1.20241016.01.00")
+                        addProperty("hl", "en")
+                        addProperty("gl", "IN")
+                    })
+                })
+                addProperty("browseId", browseId)
+            }
+            val builder = Request.Builder()
+                .url("https://music.youtube.com/youtubei/v1/browse?prettyPrint=false")
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                .header("Origin", "https://music.youtube.com")
+            val authed = attachAuth(builder)
+            val request = builder
+                .post(payload.toString().toRequestBody("application/json".toMediaType()))
+                .build()
+            execOrNull(request, authed)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun findArtistHeader(el: com.google.gson.JsonElement): JsonObject? {
+        if (el.isJsonObject) {
+            val h = el.asJsonObject.getAsJsonObject("musicImmersiveHeaderRenderer")
+                ?: el.asJsonObject.getAsJsonObject("musicVisualHeaderRenderer")
+            if (h != null) return h
+            for (e in el.asJsonObject.entrySet()) findArtistHeader(e.value)?.let { return it }
+        } else if (el.isJsonArray) {
+            for (e in el.asJsonArray) findArtistHeader(e)?.let { return it }
+        }
+        return null
+    }
+
+    private fun collectShelfSongs(el: com.google.gson.JsonElement, out: MutableList<Song>) {
+        if (el.isJsonObject) {
+            val o = el.asJsonObject
+            val r = o.getAsJsonObject("musicResponsiveListItemRenderer")
+            if (r != null) {
+                parseMusicItem(r)?.let { out.add(it) }
+            } else {
+                for (e in o.entrySet()) collectShelfSongs(e.value, out)
+            }
+        } else if (el.isJsonArray) {
+            for (e in el.asJsonArray) collectShelfSongs(e, out)
+        }
+    }
+
+    private fun collectArtistShelves(el: com.google.gson.JsonElement, topSongs: MutableList<Song>, albums: MutableList<com.contentagent.vibestream.data.model.SearchEntry>) {
+        if (el.isJsonObject) {
+            val o = el.asJsonObject
+            val shelf = o.getAsJsonObject("musicShelfRenderer")
+            if (shelf != null) {
+                val title = runsText(shelf, "title")
+                if (title.contains("song", ignoreCase = true)) {
+                    val items = shelf.getAsJsonArray("contents")
+                    items?.forEach { it.asJsonObject.getAsJsonObject("musicResponsiveListItemRenderer")?.let { r -> parseMusicItem(r)?.let(topSongs::add) } }
+                }
+                return
+            }
+            val carousel = o.getAsJsonObject("musicCarouselShelfRenderer")
+            if (carousel != null) {
+                carousel.getAsJsonArray("contents")?.forEach { item ->
+                    val mtr = item.asJsonObject.getAsJsonObject("musicTwoRowItemRenderer") ?: return@forEach
+                    val browse = mtr.getAsJsonObject("navigationEndpoint")?.getAsJsonObject("browseEndpoint")?.get("browseId")?.asString ?: return@forEach
+                    // Albums/EPs/singles carry an MPREb browse id; playlists and channels do not.
+                    if (!browse.startsWith("MPREb")) return@forEach
+                    val t = runsText(mtr, "title")
+                    if (t.isNotBlank()) albums.add(com.contentagent.vibestream.data.model.SearchEntry(
+                        browse, t, runsText(mtr, "subtitle"),
+                        bestThumbnail(mtr, "thumbnailRenderer", "musicThumbnailRenderer", "thumbnail"), "album"))
+                }
+                return
+            }
+            for (e in o.entrySet()) collectArtistShelves(e.value, topSongs, albums)
+        } else if (el.isJsonArray) {
+            for (e in el.asJsonArray) collectArtistShelves(e, topSongs, albums)
+        }
+    }
+
     private val apiMirrors = listOf(
         "https://pipedapi.kavin.rocks",
         "https://api.piped.privacy.com.de",
@@ -106,13 +439,14 @@ class YouTubeExtractor {
                 addProperty("playlistId", "RDAMVM$seedId")
                 addProperty("isAudioOnly", true)
             }
-            val request = Request.Builder()
+            val builder = Request.Builder()
                 .url("https://music.youtube.com/youtubei/v1/next?prettyPrint=false")
                 .header("User-Agent", "Mozilla/5.0")
                 .header("Origin", "https://music.youtube.com")
+            val authed = attachAuth(builder)
+            val request = builder
                 .post(payload.toString().toRequestBody("application/json".toMediaType())).build()
-            val body = client.newBuilder().callTimeout(8, TimeUnit.SECONDS).build()
-                .newCall(request).execute().use { if (it.isSuccessful) it.body?.string() else null }
+            val body = execOrNull(request, authed)
                 ?: return@withContext emptyList()
             parseRadio(body).filter { it.id != seedId }
         } catch (e: kotlinx.coroutines.CancellationException) { throw e }
@@ -162,15 +496,15 @@ class YouTubeExtractor {
                 addProperty("query", query.trim())
                 addProperty("params", "EgWKAQIIAWoKEAkQBRAKEAMQBA==")
             }
-            val request = Request.Builder()
+            val builder = Request.Builder()
                 .url("https://music.youtube.com/youtubei/v1/search?prettyPrint=false")
                 .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
                 .header("Origin", "https://music.youtube.com")
+            val authed = attachAuth(builder)
+            val request = builder
                 .post(payload.toString().toRequestBody("application/json".toMediaType()))
                 .build()
-            val body = client.newCall(request).execute().use { r ->
-                if (r.isSuccessful) r.body?.string() else null
-            } ?: return emptyList()
+            val body = execOrNull(request, authed) ?: return emptyList()
             val out = mutableListOf<Song>()
             collectSongs(JsonParser.parseString(body), out)
             out.distinctBy { it.id }

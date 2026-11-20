@@ -46,6 +46,8 @@ class MainActivity : ComponentActivity() {
         // Initialize on-device components (zero external server required)
         extractor = YouTubeExtractor()
         extractor.searchCache = com.contentagent.vibestream.data.local.SearchCacheStore(applicationContext)
+        com.contentagent.vibestream.data.auth.YtMusicAuth.init(applicationContext)
+        extractor.authCookieProvider = { com.contentagent.vibestream.data.auth.YtMusicAuth.cookieOrNull() }
         offlineStorage = OfflineStorage(applicationContext)
         library = LibraryStore(applicationContext)
         downloadManager = DownloadManager(applicationContext, extractor, offlineStorage)
