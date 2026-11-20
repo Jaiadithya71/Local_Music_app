@@ -39,9 +39,19 @@ class YouTubeExtractor {
     suspend fun searchSongs(query: String, musicOnly: Boolean = true): List<Song> = withContext(Dispatchers.IO) {
         if (musicOnly) {
             // Music mode: songs only, no podcasts, compilations or long videos.
-            val songs = com.contentagent.vibestream.data.recommendation.MusicSearchPolicy.songsOnly(searchYouTubeMusic(query))
-            if (songs.isNotEmpty()) return@withContext songs
-            return@withContext com.contentagent.vibestream.data.recommendation.MusicSearchPolicy.songsOnly(searchViaMirrors(query, musicOnly))
+            val policy = com.contentagent.vibestream.data.recommendation.MusicSearchPolicy
+            val songs = policy.songsOnly(searchYouTubeMusic(query))
+            // YouTube Music's anonymous catalog misses some tracks (seen with regional film
+            // songs). When no song covers the query words, add matching YouTube uploads as
+            // video results so the track is still reachable; they show under All/Videos.
+            val merged = if (policy.coversQuery(songs, query)) songs else {
+                val vids = policy.musicVideosOnly(searchYouTubeWeb(query))
+                // Uploads that cover every query word lead, then the catalog songs.
+                val hits = vids.filter { policy.coversQuery(listOf(it), query) }
+                (hits + songs + (vids - hits.toSet())).distinctBy { it.id }
+            }
+            if (merged.isNotEmpty()) return@withContext merged
+            return@withContext policy.songsOnly(searchViaMirrors(query, musicOnly))
         }
         // Podcasts & more: same results as the YouTube app first (compilations,
         // long mixes, channels), then YouTube Music songs not already listed.
