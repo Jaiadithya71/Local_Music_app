@@ -13,7 +13,15 @@ import com.contentagent.vibestream.data.model.ArtistPage
 import com.contentagent.vibestream.data.model.SearchEntry
 import com.contentagent.vibestream.data.model.SearchSections
 import com.contentagent.vibestream.data.model.Song
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.contentagent.vibestream.ui.screens.AlbumPageView
+import com.contentagent.vibestream.ui.screens.DeviceCodeCard
+import com.contentagent.vibestream.ui.theme.DarkBackground
 import com.contentagent.vibestream.ui.screens.ArtistPageView
 import com.contentagent.vibestream.ui.screens.SectionedSearchResults
 import com.contentagent.vibestream.ui.theme.VibeStreamTheme
@@ -74,6 +82,25 @@ class SectionedRenderTest {
             SearchEntry("ar2", "Javed Ali", "Artist • 3.1M subscribers", "", "artist")),
         playlists = listOf(
             SearchEntry("p1", "Srivalli Vibes", "Playlist • 42 songs", "", "playlist")))
+
+    @Test(timeout = 120000)
+    fun render_deviceCodeSignIn() {
+        scenario { act ->
+            act.setContent {
+                VibeStreamTheme {
+                    Column(modifier = Modifier.fillMaxSize().background(DarkBackground).padding(24.dp)) {
+                        DeviceCodeCard(
+                            userCode = "WXYZ-1234",
+                            verificationUrl = "https://www.google.com/device",
+                            expiresAtMs = System.currentTimeMillis() + 28 * 60_000L,
+                            onOpen = {})
+                    }
+                }
+            }
+            pump(act)
+            snap(act.window.decorView, "device-code-signin", 1080, 2400)
+        }
+    }
 
     @Test(timeout = 120000)
     fun render_sectionedSearch() {

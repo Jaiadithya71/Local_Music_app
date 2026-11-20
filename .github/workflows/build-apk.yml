@@ -12,12 +12,18 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    env:
+      YTM_CLIENT_ID: ${{ secrets.YTM_CLIENT_ID }}
+      YTM_CLIENT_SECRET: ${{ secrets.YTM_CLIENT_SECRET }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
+      - name: Check OAuth configuration
+        run: |
+          test -n "$YTM_CLIENT_ID" && test -n "$YTM_CLIENT_SECRET" || { echo "::error::YouTube Music OAuth secrets are missing"; exit 1; }
       - name: Decode signing keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
@@ -34,7 +40,7 @@ jobs:
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon testDebugUnitTest --tests '*SongSeedPolicyTest' --tests '*RelatedSongCacheTest' --tests '*MusicSearchPolicyTest' --tests '*DiscoveryPolicyTest' --tests '*DiscoveryHomeTest' --tests '*QueueReconnectTest' --tests '*PersistenceTest' --tests '*MixBuilderTest' --tests '*PlaybackCacheTest' --tests '*DeviceVolumeTest' --tests '*SlowRadioHomeTest' --tests '*BackupImportSeedsTest' --tests '*PlaylistDownloadTest' --tests '*TrackDownloadQueueTest' --tests '*StreamUrlStoreTest'
+          ./gradlew --no-daemon testDebugUnitTest --tests '*GoogleDeviceAuthTest' --tests '*SongSeedPolicyTest' --tests '*RelatedSongCacheTest' --tests '*MusicSearchPolicyTest' --tests '*DiscoveryPolicyTest' --tests '*DiscoveryHomeTest' --tests '*QueueReconnectTest' --tests '*PersistenceTest' --tests '*MixBuilderTest' --tests '*PlaybackCacheTest' --tests '*DeviceVolumeTest' --tests '*SlowRadioHomeTest' --tests '*BackupImportSeedsTest' --tests '*PlaylistDownloadTest' --tests '*TrackDownloadQueueTest' --tests '*StreamUrlStoreTest'
       # UI rendering runs in its own Gradle invocation: sharing one JVM let a
       # leaked coroutine from the ActivityScenario tests fail SlowRadioHomeTest
       # with UncaughtExceptionsBeforeTest (run 42339918221).

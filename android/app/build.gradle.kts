@@ -18,6 +18,17 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+
+        // YouTube Music OAuth client ("TVs and limited input devices" type), injected
+        // via gradle properties or CI env (YTM_CLIENT_ID / YTM_CLIENT_SECRET). This client
+        // type is designed for installed apps; the values identify the app to Google and
+        // are not user secrets.
+        buildConfigField("String", "YTM_CLIENT_ID", "\"${(project.findProperty("YTM_CLIENT_ID") as String?) ?: System.getenv("YTM_CLIENT_ID") ?: ""}\"")
+        buildConfigField("String", "YTM_CLIENT_SECRET", "\"${(project.findProperty("YTM_CLIENT_SECRET") as String?) ?: System.getenv("YTM_CLIENT_SECRET") ?: ""}\"")
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     testOptions {

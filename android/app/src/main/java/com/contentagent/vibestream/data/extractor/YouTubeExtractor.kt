@@ -27,37 +27,22 @@ class YouTubeExtractor {
         .followRedirects(true)
         .build()
 
-    // ---- Signed-in YouTube Music session (optional) ----
+    // ---- Signed-in YouTube Music session (optional, OAuth device flow) ----
 
-    /** Supplies the current session cookie header, or null when signed out. Wired from MainActivity to YtMusicAuth. */
-    @Volatile var authCookieProvider: (() -> String?)? = null
+    /** Supplies a fresh OAuth access token, or null when signed out. Wired from MainActivity to YtMusicAuth. */
+    @Volatile var authTokenProvider: (() -> String?)? = null
 
-    /** True after the server rejects our session (expired/revoked cookie); UI can prompt sign-in again. */
+    /** Called when the server rejects the token, so the cached token can be dropped and refreshed. */
+    @Volatile var onAuthRejected: (() -> Unit)? = null
+
+    /** True after the server rejects our session (expired/revoked token); UI can prompt sign-in again. */
     @Volatile var authRejected: Boolean = false
-
-    private fun sapisidFromCookie(cookie: String): String? {
-        for (part in cookie.split(";")) {
-            val kv = part.trim()
-            if (kv.startsWith("__Secure-3PAPISID=") || kv.startsWith("SAPISID=")) {
-                return kv.substringAfter('=').takeIf { it.isNotBlank() }
-            }
-        }
-        return null
-    }
-
-    /** SAPISIDHASH Authorization header value used by the YouTube Music web client. */
-    internal fun sapisidHash(sapisid: String, timestampSec: Long = System.currentTimeMillis() / 1000): String {
-        val digest = java.security.MessageDigest.getInstance("SHA-1")
-            .digest("$timestampSec $sapisid https://music.youtube.com".toByteArray(Charsets.UTF_8))
-        return "SAPISIDHASH ${timestampSec}_" + digest.joinToString("") { "%02x".format(it) }
-    }
 
     /** Attaches signed-in headers when a session exists. Returns true when auth was attached. */
     private fun attachAuth(builder: Request.Builder): Boolean {
-        val cookie = authCookieProvider?.invoke() ?: return false
-        val sapisid = sapisidFromCookie(cookie) ?: return false
-        builder.header("Cookie", cookie)
-        builder.header("Authorization", sapisidHash(sapisid))
+        val token = authTokenProvider?.invoke()?.takeIf { it.isNotBlank() } ?: return false
+        builder.header("Authorization", "Bearer $token")
+        builder.header("X-Goog-AuthUser", "0")
         builder.header("X-Origin", "https://music.youtube.com")
         builder.header("Referer", "https://music.youtube.com/")
         return true
@@ -74,9 +59,10 @@ class YouTubeExtractor {
                     r.body?.string()
                 } else if ((r.code == 401 || r.code == 403) && authed) {
                     authRejected = true
+                    onAuthRejected?.invoke()
                     val anon = request.newBuilder()
-                        .removeHeader("Cookie")
                         .removeHeader("Authorization")
+                        .removeHeader("X-Goog-AuthUser")
                         .build()
                     client.newCall(anon).execute().use { r2 ->
                         if (r2.isSuccessful) r2.body?.string() else null
@@ -298,6 +284,40 @@ class YouTubeExtractor {
             execOrNull(request, authed)
         } catch (e: Exception) {
             null
+        }
+    }
+
+    /**
+     * The signed-in user's YouTube Music library playlists (Liked songs, created and
+     * saved playlists). Requires sign-in; returns an empty list anonymously.
+     */
+    suspend fun libraryPlaylists(): List<com.contentagent.vibestream.data.model.SearchEntry> = withContext(Dispatchers.IO) {
+        val body = browse("FEmusic_liked_playlists") ?: return@withContext emptyList()
+        val out = mutableListOf<com.contentagent.vibestream.data.model.SearchEntry>()
+        collectTwoRowItems(JsonParser.parseString(body), out)
+        out.distinctBy { it.id }
+    }
+
+    private fun collectTwoRowItems(el: com.google.gson.JsonElement, out: MutableList<com.contentagent.vibestream.data.model.SearchEntry>) {
+        if (el.isJsonObject) {
+            val o = el.asJsonObject
+            val r = o.getAsJsonObject("musicTwoRowItemRenderer")
+            if (r != null) {
+                val id = r.getAsJsonObject("navigationEndpoint")
+                    ?.getAsJsonObject("browseEndpoint")?.get("browseId")?.asString
+                val title = r.getAsJsonObject("title")?.getAsJsonArray("runs")
+                    ?.firstOrNull()?.asJsonObject?.get("text")?.asString
+                if (!id.isNullOrBlank() && id.startsWith("VL") && !title.isNullOrBlank()) {
+                    val sub = r.getAsJsonObject("subtitle")?.getAsJsonArray("runs")
+                        ?.mapNotNull { it.asJsonObject?.get("text")?.asString }?.joinToString("") ?: ""
+                    val thumb = bestThumbnail(r, "thumbnailRenderer", "musicThumbnailRenderer", "thumbnail")
+                    out.add(com.contentagent.vibestream.data.model.SearchEntry(id, title, sub, thumb, "playlist"))
+                }
+            } else {
+                for (e in o.entrySet()) collectTwoRowItems(e.value, out)
+            }
+        } else if (el.isJsonArray) {
+            for (e in el.asJsonArray) collectTwoRowItems(e, out)
         }
     }
 

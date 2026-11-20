@@ -47,7 +47,8 @@ class MainActivity : ComponentActivity() {
         extractor = YouTubeExtractor()
         extractor.searchCache = com.contentagent.vibestream.data.local.SearchCacheStore(applicationContext)
         com.contentagent.vibestream.data.auth.YtMusicAuth.init(applicationContext)
-        extractor.authCookieProvider = { com.contentagent.vibestream.data.auth.YtMusicAuth.cookieOrNull() }
+        extractor.authTokenProvider = { com.contentagent.vibestream.data.auth.YtMusicAuth.accessTokenOrRefresh() }
+        extractor.onAuthRejected = { com.contentagent.vibestream.data.auth.YtMusicAuth.invalidateAccessToken() }
         offlineStorage = OfflineStorage(applicationContext)
         library = LibraryStore(applicationContext)
         downloadManager = DownloadManager(applicationContext, extractor, offlineStorage)

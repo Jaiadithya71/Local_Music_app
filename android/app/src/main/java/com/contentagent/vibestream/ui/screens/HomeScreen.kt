@@ -79,6 +79,33 @@ fun HomeScreen(
     var entryLoading by remember { mutableStateOf(false) }
     var showYtmSignIn by remember { mutableStateOf(false) }
     var ytmSignedIn by remember { mutableStateOf(YtMusicAuth.isSignedIn()) }
+    var ytmPlaylists by remember { mutableStateOf<List<SearchEntry>>(emptyList()) }
+    var ytmOpened by remember { mutableStateOf<SearchEntry?>(null) }
+    var ytmOpenedTracks by remember { mutableStateOf<List<Song>>(emptyList()) }
+    var ytmLoading by remember { mutableStateOf(false) }
+
+    // Load the signed-in YouTube Music library (Liked songs + playlists) once per sign-in.
+    LaunchedEffect(ytmSignedIn) {
+        if (ytmSignedIn && ytmPlaylists.isEmpty()) {
+            ytmLoading = true
+            var lists = extractor.libraryPlaylists()
+            if (lists.none { it.id == "VLLM" }) {
+                lists = listOf(SearchEntry("VLLM", "Liked songs", "YouTube Music", "", "playlist")) + lists
+            }
+            ytmPlaylists = lists
+            ytmLoading = false
+        }
+    }
+
+    val openYtmList: (SearchEntry) -> Unit = { entry ->
+        ytmOpened = entry
+        ytmOpenedTracks = emptyList()
+        ytmLoading = true
+        coroutineScope.launch {
+            ytmOpenedTracks = extractor.browseAlbumTracks(entry.id)
+            ytmLoading = false
+        }
+    }
     // (text, isPersonal): his own searches/plays come first, general feed after.
     var searchSuggestions by remember { mutableStateOf<List<Pair<String, Boolean>>>(emptyList()) }
     var showSuggestions by remember { mutableStateOf(false) }
@@ -632,8 +659,16 @@ fun HomeScreen(
                         .fillMaxWidth()
                         .clickable {
                             if (ytmSignedIn) {
-                                signOutOfYtMusic()
+                                coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                    YtMusicAuth.refreshTokenOrNull()?.let {
+                                        com.contentagent.vibestream.data.auth.GoogleDeviceAuth.revoke(it)
+                                    }
+                                    YtMusicAuth.signOut()
+                                }
                                 ytmSignedIn = false
+                                ytmPlaylists = emptyList()
+                                ytmOpened = null
+                                ytmOpenedTracks = emptyList()
                                 extractor.authRejected = false
                             } else {
                                 showYtmSignIn = true
@@ -657,8 +692,8 @@ fun HomeScreen(
                         )
                         Text(
                             if (extractor.authRejected) "Session expired - tap to sign in again"
-                            else if (ytmSignedIn) "Unofficial integration. Tap to sign out (wipes the session from this device)."
-                            else "Optional. Unofficial integration; the session cookie stays encrypted on this device.",
+                            else if (ytmSignedIn) "Unofficial integration. Tap to sign out (revokes and wipes the token from this device)."
+                            else "Optional. Unofficial integration; you approve it on Google's site and the token stays encrypted on this device.",
                             color = TextSecondary,
                             fontSize = 11.sp
                         )
@@ -671,7 +706,8 @@ fun HomeScreen(
                         .padding(horizontal = 16.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    val names = listOf("Downloads", "Liked (${likedSongs.size})", "Playlists", "Recent")
+                    val names = listOf("Downloads", "Liked (${likedSongs.size})", "Playlists", "Recent") +
+                        (if (ytmSignedIn) listOf("YT Music") else emptyList())
                     for ((i, n) in names.withIndex()) {
                         FilterChip(
                             selected = librarySection == i,
@@ -692,7 +728,25 @@ fun HomeScreen(
                         Icon(Icons.Default.FileDownload, contentDescription = "Restore library backup", tint = TextSecondary, modifier = Modifier.size(20.dp))
                     }
                 }
-                if (librarySection != 0) {
+                if (librarySection == 4 && ytmSignedIn) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        YtmLibrarySection(
+                            playlists = ytmPlaylists,
+                            opened = ytmOpened,
+                            openedTracks = ytmOpenedTracks,
+                            loading = ytmLoading,
+                            currentSongId = currentSong?.id,
+                            isPlaying = isPlaying,
+                            isDownloaded = { offlineStorage.isDownloaded(it) },
+                            isDownloading = { downloadManager.isDownloading(it) },
+                            downloadProgress = { downloadProgressMap[it] ?: 0f },
+                            onOpen = openYtmList,
+                            onBack = { ytmOpened = null },
+                            onPlay = { sg, ctx -> playerController.playSong(if (offlineStorage.isDownloaded(sg.id)) (offlineStorage.getLocalSong(sg.id) ?: sg) else sg, ctx) },
+                            onDownload = { sg -> coroutineScope.launch { downloadManager.downloadTrack(sg) } }
+                        )
+                    }
+                } else if (librarySection != 0) {
                     Box(modifier = Modifier.weight(1f)) {
                         LibrarySection(
                             section = librarySection,
@@ -909,5 +963,151 @@ fun HomeScreen(
     }
     if (showEqDialog) {
         EqualizerDialog(eq = eqManager, onDismiss = { showEqDialog = false })
+    }
+}
+
+/** Signed-in YouTube Music library: Liked songs and the user's playlists. */
+@Composable
+private fun YtmLibrarySection(
+    playlists: List<SearchEntry>,
+    opened: SearchEntry?,
+    openedTracks: List<Song>,
+    loading: Boolean,
+    currentSongId: String?,
+    isPlaying: Boolean,
+    isDownloaded: (String) -> Boolean,
+    isDownloading: (String) -> Boolean,
+    downloadProgress: (String) -> Float,
+    onOpen: (SearchEntry) -> Unit,
+    onBack: () -> Unit,
+    onPlay: (Song, List<Song>) -> Unit,
+    onDownload: (Song) -> Unit
+) {
+    if (opened != null) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = TextSecondary)
+                }
+                Text(
+                    opened.title,
+                    color = TextPrimary,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            if (loading) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CircularProgressIndicator(color = AmberOrange, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text("Loading from YouTube Music…", color = TextSecondary, fontSize = 13.sp)
+                }
+            }
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(openedTracks, key = { it.id }) { sg ->
+                    val isCurrent = currentSongId == sg.id
+                    SongCard(
+                        song = sg,
+                        isCurrentSong = isCurrent,
+                        isPlaying = isCurrent && isPlaying,
+                        isDownloading = isDownloading(sg.id),
+                        downloadProgress = downloadProgress(sg.id),
+                        isDownloaded = isDownloaded(sg.id),
+                        onPlayClick = { onPlay(sg, openedTracks) },
+                        onDownloadClick = { onDownload(sg) }
+                    )
+                }
+            }
+        }
+    } else {
+        Column(modifier = Modifier.fillMaxSize()) {
+            if (loading) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CircularProgressIndicator(color = AmberOrange, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text("Loading your YouTube Music library…", color = TextSecondary, fontSize = 13.sp)
+                }
+            } else if (playlists.isEmpty()) {
+                Text(
+                    "No YouTube Music playlists found on this account.",
+                    color = TextTertiary,
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(16.dp)
+                )
+            }
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                items(playlists, key = { it.id }) { entry ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onOpen(entry) }
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (entry.thumbnailUrl.isNotBlank()) {
+                            AsyncImage(
+                                model = entry.thumbnailUrl,
+                                contentDescription = null,
+                                modifier = Modifier.size(46.dp).clip(RoundedCornerShape(8.dp)),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .size(46.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(DarkSurfaceElevated),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    if (entry.id == "VLLM") Icons.Default.Favorite else Icons.Default.QueueMusic,
+                                    contentDescription = null,
+                                    tint = AmberOrange,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                entry.title,
+                                color = TextPrimary,
+                                fontSize = 14.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            if (entry.subtitle.isNotBlank()) {
+                                Text(
+                                    entry.subtitle,
+                                    color = TextSecondary,
+                                    fontSize = 11.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
