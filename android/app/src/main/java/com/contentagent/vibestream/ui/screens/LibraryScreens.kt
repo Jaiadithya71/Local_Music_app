@@ -374,11 +374,16 @@ fun AddToPlaylistDialog(library: LibraryStore, song: Song, onDismiss: () -> Unit
 }
 
 @Composable
-fun QueueDialog(queue: List<Song>, index: Int, onPick: (Int) -> Unit, onDismiss: () -> Unit) {
+fun QueueDialog(queue: List<Song>, index: Int, onPick: (Int) -> Unit, onDismiss: () -> Unit, status: String = "") {
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = DarkSurfaceElevated,
-        title = { Text("Queue (${queue.size})", color = TextPrimary) },
+        title = {
+            Column {
+                Text("Queue (${queue.size})", color = TextPrimary)
+                if (status.isNotBlank()) Text(status, color = AmberOrange, fontSize = 12.sp)
+            }
+        },
         text = {
             LazyColumn(modifier = Modifier.heightIn(max = 420.dp)) {
                 itemsIndexed(queue) { i, s ->

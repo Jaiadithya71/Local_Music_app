@@ -19,10 +19,12 @@ class QueueStore(context: Context) {
         val index: Int = -1,
         val positionMs: Long = 0L,
         val shuffle: Boolean = false,
-        val repeat: Int = 0
+        val repeat: Int = 0,
+        val discovery: Boolean = false,
+        val avoidedArtists: Set<String> = emptySet()
     )
 
-    fun save(songs: List<Song>, index: Int, positionMs: Long, shuffle: Boolean, repeat: Int) {
+    fun save(songs: List<Song>, index: Int, positionMs: Long, shuffle: Boolean, repeat: Int, discovery: Boolean = false, avoidedArtists: Set<String> = emptySet()) {
         val clean = songs.map { it.copy(streamUrl = null, isDownloading = false, downloadProgress = 0f) }
         prefs.edit()
             .putString("songs", gson.toJson(clean))
@@ -30,6 +32,8 @@ class QueueStore(context: Context) {
             .putLong("position_ms", positionMs)
             .putBoolean("shuffle", shuffle)
             .putInt("repeat", repeat)
+            .putBoolean("discovery", discovery)
+            .putStringSet("avoided_artists", if (discovery) avoidedArtists else emptySet())
             .apply()
     }
 
@@ -48,7 +52,9 @@ class QueueStore(context: Context) {
             index = prefs.getInt("index", -1).coerceIn(-1, songs.size - 1),
             positionMs = prefs.getLong("position_ms", 0L),
             shuffle = prefs.getBoolean("shuffle", false),
-            repeat = prefs.getInt("repeat", 0)
+            repeat = prefs.getInt("repeat", 0),
+            discovery = prefs.getBoolean("discovery", false),
+            avoidedArtists = prefs.getStringSet("avoided_artists", emptySet())?.toSet().orEmpty()
         )
     }
 

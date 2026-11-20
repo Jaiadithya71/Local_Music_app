@@ -98,6 +98,81 @@ class MusicPlayerController(
     private val _repeat = MutableStateFlow(0) // 0 off, 1 all, 2 one
     val repeat: StateFlow<Int> = _repeat.asStateFlow()
 
+    // Live adaptation is opt-in per discovery playback session. Explicit
+    // playlists/search/offline queues retain their order and never get additions.
+    private val liveQueue = LiveQueueSession()
+    private var adaptationJob: Job? = null
+    var knownSongsProvider: () -> Set<String> = { emptySet() }
+    var likedSongsProvider: () -> List<Song> = { emptyList() }
+    var onEarlySkip: ((Song) -> Unit)? = null
+    private val _liveQueueStatus = MutableStateFlow("")
+    val liveQueueStatus: StateFlow<String> = _liveQueueStatus.asStateFlow()
+
+    fun onLikeChanged(song: Song, liked: Boolean) {
+        if (liked) adaptDiscovery(song, com.contentagent.vibestream.data.recommendation.LiveQueuePolicy.Signal.LIKE)
+    }
+
+    /** One path for in-app, notification, lock-screen and headset Next taps. */
+    fun onUserNext(positionMs: Long) {
+        val song = _currentSong.value ?: return
+        if (!liveQueue.acceptEarlySkip(song, positionMs)) return
+        onEarlySkip?.invoke(song)
+        adaptDiscovery(song, com.contentagent.vibestream.data.recommendation.LiveQueuePolicy.Signal.SKIP)
+    }
+
+    private fun adaptDiscovery(song: Song, signal: com.contentagent.vibestream.data.recommendation.LiveQueuePolicy.Signal) {
+        if (!liveQueue.active) return
+        val epoch = liveQueue.epoch
+        adaptationJob?.cancel()
+        val taste = com.contentagent.vibestream.data.local.TasteStore(context).load()
+        fun apply(candidates: List<Song>) {
+            if (!liveQueue.active || liveQueue.epoch != epoch) return
+            val before = _queue.value
+            val index = _queueIndex.value
+            val actualId = controller?.currentMediaItem?.mediaId
+            if (actualId != null && actualId != before.getOrNull(index)?.id) return
+            val revised = liveQueue.revise(
+                epoch, before, index, candidates,
+                com.contentagent.vibestream.data.recommendation.LiveQueuePolicy.Feedback(song, signal),
+                knownSongsProvider(), taste.languages, taste.moods
+            )
+            if (revised != before) {
+                _queue.value = revised
+                shufflePlayed.clear()
+                // Only remove/rebuild the prefetched NEXT media item. No pause,
+                // seek, setMediaItem or change to the playing item's URI/position.
+                refreshUpcomingTrack()
+                persistQueue()
+            }
+        }
+        _liveQueueStatus.value = "Updating upcoming discoveries"
+        adaptationJob = playerScope.launch {
+            // Let an in-flight media-key skip finish before editing its tail.
+            kotlinx.coroutines.yield()
+            try {
+                apply(emptyList())
+                val seed = if (signal == com.contentagent.vibestream.data.recommendation.LiveQueuePolicy.Signal.SKIP)
+                    likedSongsProvider().firstOrNull { it.artist !in liveQueue.avoidedArtists } else song
+                val candidates = kotlinx.coroutines.withTimeoutOrNull(20_000) {
+                    val related = seed?.let { extractor.relatedSongs(it.id) }.orEmpty()
+                    if (related.size >= 5) related else {
+                        val query = if (signal == com.contentagent.vibestream.data.recommendation.LiveQueuePolicy.Signal.LIKE)
+                            "${song.artist} songs"
+                        else listOfNotNull(taste.languages.firstOrNull(), taste.moods.firstOrNull(), "new songs").joinToString(" ")
+                        (related + extractor.searchSongs(query, true)).distinctBy { it.id }
+                    }
+                }.orEmpty()
+                if (liveQueue.epoch == epoch && liveQueue.active) {
+                    apply(candidates)
+                    _liveQueueStatus.value = if (candidates.isEmpty()) "Upcoming discoveries updated; no new related tracks available" else "Upcoming discoveries updated"
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) {
+                if (liveQueue.epoch == epoch) _liveQueueStatus.value = "Kept upcoming discoveries; connection unavailable"
+            }
+        }
+    }
+
     // ---- Sleep timer (fades volume out over the last 15s, then pauses) ----
     private val _sleepEndAtMs = MutableStateFlow<Long?>(null)
     val sleepEndAtMs: StateFlow<Long?> = _sleepEndAtMs.asStateFlow()
@@ -210,6 +285,12 @@ class MusicPlayerController(
         val restored = QueueReconnect.reconcile(saved?.songs.orEmpty(), saved?.index ?: -1, item?.mediaId)
         _queue.value = restored.songs
         _queueIndex.value = restored.index
+        liveQueue.begin(saved?.discovery == true && restored.index in restored.songs.indices)
+        if (liveQueue.active) {
+            liveQueue.avoidedArtists.addAll(saved?.avoidedArtists.orEmpty())
+            restored.songs.take(restored.index + 1).forEach { liveQueue.notePlaying(it) }
+        }
+        _liveQueueStatus.value = if (liveQueue.active) "Live discovery queue" else ""
         if (saved != null) {
             _shuffle.value = saved.shuffle
             _repeat.value = saved.repeat
@@ -231,7 +312,7 @@ class MusicPlayerController(
             _queue.value, _queueIndex.value,
             if (controller?.currentMediaItem?.mediaId == _queue.value.getOrNull(_queueIndex.value)?.id)
                 controller?.currentPosition ?: 0L else 0L,
-            _shuffle.value, _repeat.value
+            _shuffle.value, _repeat.value, liveQueue.active, liveQueue.avoidedArtists
         )
     }
 
@@ -308,7 +389,8 @@ class MusicPlayerController(
         else -> -1
     }
 
-    fun next() {
+    fun next(userInitiated: Boolean = true) {
+        if (userInitiated) onUserNext(controller?.currentPosition ?: _currentPosition.value)
         val q = _queue.value
         if (q.isEmpty()) return
         val i = _queueIndex.value
@@ -387,7 +469,7 @@ class MusicPlayerController(
                             _sleepEndOfTrack.value = false
                             controller?.pause()
                         } else {
-                            next()
+                            next(userInitiated = false)
                         }
                     }
                     Player.STATE_IDLE -> {
@@ -407,6 +489,7 @@ class MusicPlayerController(
                     }
                     _queueIndex.value = idx
                     _currentSong.value = q[idx]
+                    if (old != idx) liveQueue.notePlaying(q[idx])
                     if (old != idx) {
                         recoveryAttempts = 0
                         alternateHops = 0
@@ -429,6 +512,9 @@ class MusicPlayerController(
                     while (c.mediaItemCount > 1 && c.currentMediaItemIndex > 10) c.removeMediaItem(0)
                 }
                 scheduleNextPrefetch()
+                if (liveQueue.active && _queue.value.size - _queueIndex.value - 1 < 5 && adaptationJob?.isActive != true) {
+                    _currentSong.value?.let { adaptDiscovery(it, com.contentagent.vibestream.data.recommendation.LiveQueuePolicy.Signal.PLAY) }
+                }
             }
 
             override fun onPlayerError(error: PlaybackException) {
@@ -529,6 +615,7 @@ class MusicPlayerController(
                     .edit().remove("app_volume").apply()
                 refreshDeviceVolume()
                 PlaybackService.nextHandler = { next() }
+                PlaybackService.skipFeedbackHandler = { position -> onUserNext(position) }
                 PlaybackService.previousHandler = { previous() }
                 if (connected.currentMediaItem != null && playbackJob?.isActive != true) {
                     _isBuffering.value = connected.playbackState == Player.STATE_BUFFERING
@@ -729,7 +816,10 @@ class MusicPlayerController(
         }
     }
 
-    fun playSong(song: Song, context: List<Song>? = null) {
+    fun playSong(song: Song, context: List<Song>? = null, discovery: Boolean = false) {
+        liveQueue.begin(discovery)
+        adaptationJob?.cancel()
+        _liveQueueStatus.value = if (discovery) "Live discovery queue" else ""
         shufflePlayed.clear()
         if (context != null && context.any { it.id == song.id }) {
             _queue.value = context
@@ -741,6 +831,10 @@ class MusicPlayerController(
         pendingResumeMs = null
         startPlayback(song)
         persistQueue()
+        if (discovery) {
+            liveQueue.notePlaying(song)
+            adaptDiscovery(song, com.contentagent.vibestream.data.recommendation.LiveQueuePolicy.Signal.PLAY)
+        }
     }
 
     private fun startPlayback(song: Song) {

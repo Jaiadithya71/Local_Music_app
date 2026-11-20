@@ -57,6 +57,14 @@ class MainActivity : ComponentActivity() {
             com.contentagent.vibestream.data.local.StreamUrlStore(applicationContext)
         )
 
+        playerController.knownSongsProvider = {
+            library.playedKeys.value + (library.liked.value + library.playlists.value.flatMap { it.songs })
+                .flatMap { com.contentagent.vibestream.data.recommendation.DiscoveryPolicy.keys(it) }
+        }
+        playerController.likedSongsProvider = { library.liked.value }
+        playerController.onEarlySkip = { library.recordSkip(it) }
+        library.onLikeChanged = { song, liked -> playerController.onLikeChanged(song, liked) }
+
         // Spotify-style media-notification actions (like / shuffle), handled app-side.
         PlaybackService.likeHandler = {
             val s = playerController.currentSong.value

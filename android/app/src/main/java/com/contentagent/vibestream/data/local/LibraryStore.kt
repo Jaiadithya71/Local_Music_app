@@ -90,10 +90,13 @@ class LibraryStore(context: Context) {
 
     fun isLiked(id: String) = _liked.value.any { it.id == id }
 
+    var onLikeChanged: ((Song, Boolean) -> Unit)? = null
+
     fun toggleLike(song: Song) {
         val list = if (isLiked(song.id)) _liked.value.filter { it.id != song.id } else listOf(clean(song)) + _liked.value
         _liked.value = list
         save("liked", list)
+        onLikeChanged?.invoke(song, list.any { it.id == song.id })
     }
 
     fun addRecent(song: Song) {

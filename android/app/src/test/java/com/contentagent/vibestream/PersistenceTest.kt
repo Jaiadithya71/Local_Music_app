@@ -36,6 +36,18 @@ class PersistenceTest {
     }
 
     @Test
+    fun discoveryModeSurvivesRestoreButExplicitPlaylistResetsIt() {
+        val store = QueueStore(ctx)
+        store.clear()
+        store.save(listOf(song("a"),song("b")),0,123,false,0,true,setOf("Skipped singer"))
+        assertTrue(store.load()!!.discovery)
+        assertEquals(setOf("Skipped singer"),store.load()!!.avoidedArtists)
+        store.save(listOf(song("c")),0,0,false,0)
+        assertFalse(store.load()!!.discovery)
+        assertTrue(store.load()!!.avoidedArtists.isEmpty())
+    }
+
+    @Test
     fun queueStore_empty_loadsNull_soNoAutoplayOnColdStart() {
         ctx.getSharedPreferences("vibestream_queue", 0).edit().clear().commit()
         assertNull(QueueStore(ctx).load())

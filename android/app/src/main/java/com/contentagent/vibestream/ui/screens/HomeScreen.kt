@@ -185,7 +185,9 @@ fun HomeScreen(
     val maxDeviceVolume by playerController.maxDeviceVolume.collectAsState()
     val tapToSoundMs by playerController.tapToSoundMs.collectAsState()
     val rebufferCount by playerController.rebufferCount.collectAsState()
+    val liveQueueStatus by playerController.liveQueueStatus.collectAsState()
     val playbackStats = listOfNotNull(
+        liveQueueStatus.takeIf { it.isNotBlank() },
         tapToSoundMs?.let { "Started in ${"%.1f".format(it / 1000f)} s" },
         if (rebufferCount > 0) "Stalls: $rebufferCount" else null
     ).joinToString("  ·  ")
@@ -302,8 +304,6 @@ fun HomeScreen(
                     onTogglePlayPause = { playerController.togglePlayPause() },
                     onClick = { isPlayerSheetVisible = true },
                     onNext = {
-                        val s = currentSong
-                        if (s != null && currentPosition in 1..45_000) library.recordSkip(s)
                         playerController.next()
                     },
                     onPrevious = { playerController.previous() }
@@ -837,12 +837,12 @@ fun HomeScreen(
                     onModeChange = { musicOnly = it; tasteStore.setMusicOnly(it) },
                     onEditTaste = onEditTaste,
                     onPlayMood = { q ->
-                        playerController.setShuffle(true)
-                        playerController.playSong(q.first(), q)
+                        playerController.setShuffle(false)
+                        playerController.playSong(q.first(), q, discovery = true)
                     },
                     extractor = extractor,
                     currentSongId = currentSong?.id,
-                    onPlay = { sg, ctx -> playerController.playSong(sg, ctx) },
+                    onPlay = { sg, ctx -> playerController.playSong(sg, ctx, discovery = true) },
                     onSeeAll = { q -> selectedTab = 1; searchQuery = q; performSearch(q) },
                     skippedArtists = artistSkips.filterValues { it >= 2 }.keys,
                     onSongsVisible = { songs -> playerController.prefetchVisible(songs.take(4)) }
@@ -904,7 +904,6 @@ fun HomeScreen(
             onShuffle = { playerController.toggleShuffle() },
             onRepeat = { playerController.cycleRepeat() },
             onNext = {
-                if (currentPosition in 1..45_000) library.recordSkip(song)
                 playerController.next()
             },
             onPrevious = { playerController.previous() },
@@ -932,7 +931,7 @@ fun HomeScreen(
         )
     }
     if (showQueue) {
-        QueueDialog(queue = queueList, index = queueIdx, onPick = { playerController.playAt(it) }, onDismiss = { showQueue = false })
+        QueueDialog(queue = queueList, index = queueIdx, onPick = { playerController.playAt(it) }, onDismiss = { showQueue = false }, status = liveQueueStatus)
     }
     addToPlaylistSong?.let { sg ->
         AddToPlaylistDialog(library = library, song = sg, onDismiss = { addToPlaylistSong = null })

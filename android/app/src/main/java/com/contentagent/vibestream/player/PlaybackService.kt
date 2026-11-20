@@ -30,6 +30,7 @@ class PlaybackService : MediaSessionService() {
         // Set by MusicPlayerController: notification / lock-screen skip taps land
         // here when the ExoPlayer playlist itself has no adjacent item to seek to.
         var nextHandler: (() -> Unit)? = null
+        var skipFeedbackHandler: ((Long) -> Unit)? = null
         var previousHandler: (() -> Unit)? = null
 
         // Spotify-style notification actions, wired from MainActivity.
@@ -195,9 +196,11 @@ class PlaybackService : MediaSessionService() {
                     .build()
             }
             override fun seekToNext() {
+                skipFeedbackHandler?.invoke(exo.currentPosition)
                 if (exo.hasNextMediaItem()) super.seekToNextMediaItem() else nextHandler?.invoke()
             }
             override fun seekToNextMediaItem() {
+                skipFeedbackHandler?.invoke(exo.currentPosition)
                 if (exo.hasNextMediaItem()) super.seekToNextMediaItem() else nextHandler?.invoke()
             }
             override fun seekToPrevious() {
