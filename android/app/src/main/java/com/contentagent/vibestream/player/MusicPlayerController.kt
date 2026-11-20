@@ -724,7 +724,7 @@ class MusicPlayerController(
                         all.firstOrNull()
                     } ?: continue
                     StreamWarmup.warm(context, url)
-                    delay(600)
+                    delay(300)
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
                 } catch (e: Exception) {

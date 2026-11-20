@@ -33,10 +33,37 @@ class YouTubeExtractor {
         "https://api.piped.projectsegfau.lt"
     )
 
+    // Optional persistent cache (wired from MainActivity). Session memory cache works regardless.
+    var searchCache: com.contentagent.vibestream.data.local.SearchCacheStore? = null
+    private val memCache = object : LinkedHashMap<String, Pair<Long, List<Song>>>(32, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<Long, List<Song>>>?) = size > 32
+    }
+    private val memSuggestCache = object : LinkedHashMap<String, Pair<Long, List<String>>>(32, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<Long, List<String>>>?) = size > 32
+    }
+
     /**
      * Searches YouTube for music tracks matching the given query.
+     * Answers from the session cache (30 min) or the disk cache (24 h) when fresh.
      */
     suspend fun searchSongs(query: String, musicOnly: Boolean = true): List<Song> = withContext(Dispatchers.IO) {
+        if (query.isBlank()) return@withContext emptyList()
+        val key = query.trim().lowercase(java.util.Locale.ROOT) + "|" + musicOnly
+        val now = System.currentTimeMillis()
+        memCache[key]?.let { if (now - it.first < 30 * 60 * 1000L) return@withContext it.second }
+        searchCache?.get(query, musicOnly, now)?.let {
+            memCache[key] = now to it
+            return@withContext it
+        }
+        val fresh = searchSongsLive(query, musicOnly)
+        if (fresh.isNotEmpty()) {
+            memCache[key] = now to fresh
+            searchCache?.put(query, musicOnly, fresh)
+        }
+        fresh
+    }
+
+    private suspend fun searchSongsLive(query: String, musicOnly: Boolean): List<Song> = withContext(Dispatchers.IO) {
         if (musicOnly) {
             // Music mode: songs only, no podcasts, compilations or long videos.
             val policy = com.contentagent.vibestream.data.recommendation.MusicSearchPolicy
@@ -419,6 +446,8 @@ class YouTubeExtractor {
      */
     suspend fun getSearchSuggestions(query: String): List<String> = withContext(Dispatchers.IO) {
         if (query.trim().isEmpty()) return@withContext emptyList<String>()
+        val sKey = query.trim().lowercase(java.util.Locale.ROOT)
+        memSuggestCache[sKey]?.let { if (System.currentTimeMillis() - it.first < 10 * 60 * 1000L) return@withContext it.second }
         val encoded = java.net.URLEncoder.encode(query.trim(), "UTF-8")
         // suggestqueries-clients6.youtube.com now answers 400; the google.com host
         // is the one that still returns the JSON [query, [suggestions...]] shape
@@ -441,6 +470,7 @@ class YouTubeExtractor {
                     for (elem in suggestionsArray) {
                         list.add(elem.asString)
                     }
+                    if (list.isNotEmpty()) memSuggestCache[sKey] = System.currentTimeMillis() to list
                     return@withContext list
                 }
             }

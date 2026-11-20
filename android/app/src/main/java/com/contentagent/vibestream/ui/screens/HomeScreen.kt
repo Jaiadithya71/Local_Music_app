@@ -26,6 +26,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import coil.compose.AsyncImage
+import coil.imageLoader
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -207,7 +208,12 @@ fun HomeScreen(
                     searchError = "No songs found for '$query'. Try another search term."
                 } else {
                     // Warm the top results so tapping one starts immediately.
-                    playerController.prefetchVisible(results.take(4))
+                    playerController.prefetchVisible(results.take(6), maxCount = 6)
+                    // Preload the first artworks so rows paint with their art, not after it.
+                    results.take(8).forEach { s ->
+                        val art = s.thumbnailUrl.ifEmpty { "https://i.ytimg.com/vi/${s.id}/hqdefault.jpg" }
+                        appCtx.imageLoader.enqueue(coil.request.ImageRequest.Builder(appCtx).data(art).build())
+                    }
                 }
             } catch (e: Exception) {
                 searchError = "Search error: ${e.localizedMessage}"

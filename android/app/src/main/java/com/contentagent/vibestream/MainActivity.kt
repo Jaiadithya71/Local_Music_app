@@ -45,6 +45,7 @@ class MainActivity : ComponentActivity() {
 
         // Initialize on-device components (zero external server required)
         extractor = YouTubeExtractor()
+        extractor.searchCache = com.contentagent.vibestream.data.local.SearchCacheStore(applicationContext)
         offlineStorage = OfflineStorage(applicationContext)
         library = LibraryStore(applicationContext)
         downloadManager = DownloadManager(applicationContext, extractor, offlineStorage)
