@@ -61,6 +61,46 @@ class ShelfRefreshTest {
   compose.onNodeWithText("New picks").performClick();compose.waitForIdle()
   compose.runOnIdle {assertEquals(1,clears)}
  }
+ @Test fun uploadOnlyShelvesWithLargeHistoryAndCountDiagnostics() {
+  val ctx=ApplicationProvider.getApplicationContext<Context>()
+  ctx.getSharedPreferences("vibestream_shelves",0).edit().clear().commit()
+  com.contentagent.vibestream.ui.screens.clearShelfMemory()
+  TasteStore(ctx).save(TasteProfile())
+  val known = (1..5000).flatMap { DiscoveryPolicy.keys(Song("old$it", "Old recording $it", "Singer")) }.toSet()
+  var emptyResults by mutableStateOf(false)
+  compose.setContent { VibeStreamTheme {
+   androidx.compose.material3.Surface(color = com.contentagent.vibestream.ui.theme.DarkBackground) {
+    androidx.compose.runtime.CompositionLocalProvider(com.contentagent.vibestream.ui.components.LocalSongActions provides {}) {
+     HomeShelves(YouTubeExtractor(), search={q,_->
+      (1..8).map { Song("$q-$it", "$q upload $it", "Singer $it", durationSec = if(emptyResults) 3600 else 240, kind="video") }
+     },related={emptyList()},currentSongId=null,onPlay={_,_->},onSeeAll={},playedKeys=known)
+    }
+   }
+  } }
+  compose.waitForIdle()
+  for(query in listOf("tamil hit songs", "bollywood hit songs", "lofi chill songs", "workout songs")) {
+   compose.onNodeWithTag("home-shelves").performScrollToNode(hasText("$query upload 1"))
+   compose.onNodeWithText("$query upload 1").assertIsDisplayed()
+  }
+  fun capture(name:String) { compose.runOnIdle {
+   val global=Class.forName("android.view.WindowManagerGlobal").getMethod("getInstance").invoke(null)
+   val field=global.javaClass.getDeclaredField("mViews").apply{isAccessible=true}
+   val view=(field.get(global) as List<android.view.View>).last()
+   val bitmap=android.graphics.Bitmap.createBitmap(view.width,view.height,android.graphics.Bitmap.Config.ARGB_8888)
+   view.draw(android.graphics.Canvas(bitmap))
+   val file=java.io.File(System.getProperty("user.home"),"renders/$name.png");file.parentFile?.mkdirs()
+   file.outputStream().use {bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)}
+  } }
+  capture("upload-shelves-large-history")
+  compose.runOnIdle { emptyResults=true }
+  compose.onNodeWithTag("home-shelves").performScrollToNode(hasText("New picks"))
+  compose.onNodeWithText("New picks").performClick();compose.waitForIdle()
+  compose.onNodeWithTag("home-shelves").performScrollToNode(hasText("Home diagnostics"))
+  compose.onAllNodesWithText("Home diagnostics").onFirst().performClick();compose.waitForIdle()
+  compose.onNodeWithTag("home-diagnostics-title").assertIsDisplayed()
+  compose.onNodeWithText("History keys 10000 | library songs 0 | loading false").assertIsDisplayed()
+  capture("home-count-diagnostics")
+ }
  @Test fun catalogClearDoesNotTouchLikesOrHistory() {
   val ctx=ApplicationProvider.getApplicationContext<Context>()
   val song=Song("cache-fixture","Saved cache fixture","Singer")

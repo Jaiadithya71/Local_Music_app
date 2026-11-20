@@ -21,7 +21,7 @@ object DiscoveryPolicy {
     fun fresh(candidates: List<Song>, known: Set<String>, skippedArtists: Set<String> = emptySet(), limit: Int = 50, musicOnly: Boolean = true): List<Song> {
         val seen = known.toMutableSet()
         val unique = candidates.filter { song ->
-            (!musicOnly || MusicSearchPolicy.songsOnly(listOf(song)).isNotEmpty()) &&
+            (!musicOnly || MusicSearchPolicy.discoveryTracks(listOf(song)).isNotEmpty()) &&
                 keys(song).none { it in seen } && keys(song).also { seen.addAll(it) }.isNotEmpty()
         }.sortedBy { if (it.artist.trim().lowercase(Locale.ROOT) in skippedArtists.map { a -> a.trim().lowercase(Locale.ROOT) }) 1 else 0 }
         val pending = unique.toMutableList()
@@ -32,6 +32,14 @@ object DiscoveryPolicy {
             out.add(pending.removeAt(i))
         }
         return out
+    }
+
+    /** Counts only, suitable for a screenshot without exposing titles, IDs or tokens. */
+    fun diagnostic(candidates: List<Song>, known: Set<String>, musicOnly: Boolean): String {
+        val qualified = if (musicOnly) MusicSearchPolicy.discoveryTracks(candidates) else candidates
+        val hidden = qualified.count { song -> keys(song).any { it in known } }
+        val visible = fresh(candidates, known, limit = candidates.size, musicOnly = musicOnly).size
+        return "Fetched ${candidates.size} | catalog ${candidates.count { it.kind != "video" }} | uploads ${candidates.count { it.kind == "video" }} | filtered ${candidates.size - qualified.size} | known $hidden | duplicates ${qualified.size - hidden - visible} | visible $visible"
     }
 
     fun queries(languages: List<String>, moods: List<String>, artists: List<String>, round: Int): List<String> {

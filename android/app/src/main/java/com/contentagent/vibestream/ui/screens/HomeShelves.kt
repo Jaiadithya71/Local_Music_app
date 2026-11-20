@@ -210,6 +210,7 @@ fun HomeShelves(
     var refreshing by remember { mutableStateOf(false) }
     var forceRefresh by remember { mutableStateOf(false) }
     var cacheDialog by remember { mutableStateOf(false) }
+    var diagnosticsDialog by remember { mutableStateOf(false) }
     var cacheEpoch by remember { mutableStateOf(0) }
     val known = playedKeys + (recent + liked + playlists.flatMap { it.songs }).flatMap { DiscoveryPolicy.keys(it) }
     val seedQueries = DiscoveryPolicy.queries(profile.languages, profile.moods, profile.artists, discoveryRound)
@@ -273,6 +274,19 @@ fun HomeShelves(
         } finally { refreshing = false; forceRefresh = false }
         val topShelf = ShelfCache.data[cacheKey(shelfList.first().second, musicOnly)].orEmpty()
         if (topShelf.isNotEmpty()) onSongsVisible(topShelf.take(6))
+    }
+    if (diagnosticsDialog) {
+        androidx.compose.material3.AlertDialog(onDismissRequest = { diagnosticsDialog = false },
+            title = { Text("Home diagnostics", modifier = Modifier.testTag("home-diagnostics-title")) },
+            text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Counts only. No song names or account details.")
+                Text("History keys ${playedKeys.size} | library songs ${(liked + playlists.flatMap { it.songs }).distinctBy { it.id }.size} | loading $refreshing")
+                shelfList.forEach { (title, query) ->
+                    val pool = if (query == shelfList.first().second) discoveryPool else ShelfCache.data[cacheKey(query, musicOnly)].orEmpty()
+                    Text(title + "\n" + DiscoveryPolicy.diagnostic(pool, known, musicOnly), fontSize = 12.sp)
+                }
+            } },
+            confirmButton = { androidx.compose.material3.TextButton(onClick = { diagnosticsDialog = false }) { Text("Close") } })
     }
     if (cacheDialog) {
         androidx.compose.material3.AlertDialog(onDismissRequest = { cacheDialog = false },
@@ -366,8 +380,13 @@ fun HomeShelves(
                 },
                 onEditTaste = onEditTaste
             )
-            androidx.compose.material3.TextButton(enabled = !refreshing, onClick = { cacheDialog = true }, modifier = Modifier.padding(horizontal = 8.dp)) {
-                Text("Loading cache", color = TextSecondary, fontSize = 12.sp)
+            Row {
+                androidx.compose.material3.TextButton(enabled = !refreshing, onClick = { cacheDialog = true }, modifier = Modifier.padding(horizontal = 8.dp)) {
+                    Text("Loading cache", color = TextSecondary, fontSize = 12.sp)
+                }
+                androidx.compose.material3.TextButton(onClick = { diagnosticsDialog = true }) {
+                    Text("Home diagnostics", color = TextSecondary, fontSize = 12.sp)
+                }
             }
         }
         if (namedMixes.isNotEmpty()) {
@@ -504,10 +523,9 @@ fun HomeShelves(
                         }
                     }
                 } else if (list.isEmpty()) {
-                    val counts = ShelfCache.counts[cacheKey(query, musicOnly)]
                     val message = when {
                         failed -> "Could not refresh this shelf. Try again."
-                        counts?.second == 0 && counts.first > 0 -> "No eligible songs in these results. Try more picks."
+                        base.isNotEmpty() && DiscoveryPolicy.fresh(base, emptySet(), limit = 1, musicOnly = musicOnly).isEmpty() -> "No eligible songs in these results. Try more picks."
                         else -> "These picks are already in your listening history or library. Try more picks."
                     }
                     Text(message, color = TextSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp))

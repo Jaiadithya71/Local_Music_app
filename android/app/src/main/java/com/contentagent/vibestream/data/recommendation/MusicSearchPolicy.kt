@@ -14,6 +14,13 @@ object MusicSearchPolicy {
         it.kind != "video" && !spoken.containsMatchIn(it.title) && !compilation.containsMatchIn(it.title)
     }
 
+    /** Discovery uses the same vetted single-track upload fallback as music search.
+     * A YouTube source is not itself evidence that a recording is non-music.
+     */
+    fun discoveryTracks(items: List<Song>): List<Song> {
+        return items.filter { songsOnly(listOf(it)).isNotEmpty() || musicVideosOnly(listOf(it)).isNotEmpty() }
+    }
+
     private fun normalize(text: String): String =
         text.lowercase(Locale.ROOT).replace(Regex("[^\\p{L}\\p{N} ]"), " ")
 

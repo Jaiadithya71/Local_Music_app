@@ -41,8 +41,8 @@ class DiscoveryPolicyTest {
         assertNotEquals(D.titleKey("பச்சை நிறமே"), D.titleKey("வெண்ணிலவே"))
         assertEquals("பச்சை நிறமே", D.titleKey("பச்சை நிறமே (Official Audio)"))
     }
-    @Test fun musicModeRejectsSpokenAndVideos() {
-        val pool = listOf(song("a", "Discourse"), song("b", kind = "video"), song("c"))
+    @Test fun musicModeRejectsSpokenAndLongVideos() {
+        val pool = listOf(song("a", "Discourse"), Song("b", "Long concert", "Singer", durationSec = 3600, kind = "video"), song("c"))
         assertEquals(listOf("c"), D.fresh(pool, emptySet()).map { it.id })
         assertEquals(3, D.fresh(pool, emptySet(), musicOnly = false).size)
     }
