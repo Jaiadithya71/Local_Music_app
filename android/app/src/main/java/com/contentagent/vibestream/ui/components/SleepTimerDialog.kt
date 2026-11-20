@@ -1,6 +1,8 @@
 package com.contentagent.vibestream.ui.components
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -32,7 +34,7 @@ fun SleepTimerDialog(
         containerColor = DarkSurface,
         title = { Text("Sleep timer", color = TextPrimary, fontWeight = FontWeight.Bold) },
         text = {
-            Column {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
                 if (endAtMs != null) {
                     val remaining = ((endAtMs - now) / 1000).coerceAtLeast(0)
                     Text(

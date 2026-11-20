@@ -166,6 +166,7 @@ fun HomeScreen(
     var moreFromArtist by remember { mutableStateOf<List<com.contentagent.vibestream.data.model.Song>>(emptyList()) }
     val moreFromArtistCache = remember { mutableMapOf<String, List<com.contentagent.vibestream.data.model.Song>>() }
     var addToPlaylistSong by remember { mutableStateOf<Song?>(null) }
+    var songActions by remember { mutableStateOf<com.contentagent.vibestream.ui.components.SongActionRequest?>(null) }
     val appCtx = androidx.compose.ui.platform.LocalContext.current
     val tasteStore = remember { com.contentagent.vibestream.data.local.TasteStore(appCtx) }
     var musicOnly by remember { mutableStateOf(tasteStore.getMusicOnly()) }
@@ -286,6 +287,7 @@ fun HomeScreen(
 
     val quickGenres = listOf("Trending", "Lo-Fi Hip Hop", "Synthwave", "Rock Anthems", "Chill Acoustic", "EDM Hits")
 
+    CompositionLocalProvider(com.contentagent.vibestream.ui.components.LocalSongActions provides { songActions = it }) {
     Scaffold(
         containerColor = DarkBackground,
         bottomBar = {
@@ -361,6 +363,26 @@ fun HomeScreen(
                     )
                 }
 
+                if (currentSong != null) {
+                    IconButton(onClick = { showSleepDialog = true }) {
+                        Icon(Icons.Default.Bedtime, "Sleep timer", tint = if (sleepEndAt != null || sleepEndOfTrack) AmberOrange else TextSecondary)
+                    }
+                }
+                if (selectedTab == 2 && ytmSignedIn) {
+                    com.contentagent.vibestream.ui.components.YouTubeAccountMenu(onSignOut = {
+                        val tokenToRevoke = YtMusicAuth.refreshTokenOrNull()
+                        YtMusicAuth.signOut()
+                        extractor.clearSearchCaches()
+                        coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                            tokenToRevoke?.let { com.contentagent.vibestream.data.auth.GoogleDeviceAuth.revoke(it) }
+                        }
+                        ytmSignedIn = false; ytmPlaylists = emptyList()
+                        ytmOpened = null; ytmOpenedTracks = emptyList()
+                        if (librarySection == 4) librarySection = 0
+                        extractor.authRejected = false
+                        clearShelfMemory()
+                    })
+                }
                 Surface(
                     shape = RoundedCornerShape(16.dp),
                     color = DarkSurfaceElevated,
@@ -390,6 +412,8 @@ fun HomeScreen(
             if (showYtmSignIn) {
                 YtMusicSignInScreen(onDone = {
                     showYtmSignIn = false
+                    extractor.clearSearchCaches()
+                    clearShelfMemory()
                     ytmSignedIn = YtMusicAuth.isSignedIn()
                     extractor.authRejected = false
                 })
@@ -654,49 +678,11 @@ fun HomeScreen(
                 }
             } else if (selectedTab == 2) {
               Column(modifier = Modifier.fillMaxSize()) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            if (ytmSignedIn) {
-                                coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                                    YtMusicAuth.refreshTokenOrNull()?.let {
-                                        com.contentagent.vibestream.data.auth.GoogleDeviceAuth.revoke(it)
-                                    }
-                                    YtMusicAuth.signOut()
-                                }
-                                ytmSignedIn = false
-                                ytmPlaylists = emptyList()
-                                ytmOpened = null
-                                ytmOpenedTracks = emptyList()
-                                extractor.authRejected = false
-                            } else {
-                                showYtmSignIn = true
-                            }
-                        }
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        Icons.Default.AccountCircle,
-                        contentDescription = null,
-                        tint = if (ytmSignedIn) AmberOrange else TextSecondary,
-                        modifier = Modifier.size(22.dp)
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            if (ytmSignedIn) "YouTube Music signed in" else "Sign in to YouTube Music",
-                            color = TextPrimary,
-                            fontSize = 14.sp
-                        )
-                        Text(
-                            if (extractor.authRejected) "Session expired - tap to sign in again"
-                            else if (ytmSignedIn) "Unofficial integration. Tap to sign out (revokes and wipes the token from this device)."
-                            else "Optional. Unofficial integration; you approve it on Google's site and the token stays encrypted on this device.",
-                            color = TextSecondary,
-                            fontSize = 11.sp
-                        )
+                if (!ytmSignedIn) {
+                    TextButton(onClick = { showYtmSignIn = true }, modifier = Modifier.padding(horizontal = 8.dp)) {
+                        Icon(Icons.Default.AccountCircle, null, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Sign in to YouTube Music")
                     }
                 }
                 Row(
@@ -964,6 +950,20 @@ fun HomeScreen(
     if (showEqDialog) {
         EqualizerDialog(eq = eqManager, onDismiss = { showEqDialog = false })
     }
+    songActions?.let { request ->
+        val s = request.song
+        com.contentagent.vibestream.ui.components.SongActionsSheet(
+            song = s, isLiked = likedSongs.any { it.id == s.id },
+            isDownloaded = offlineStorage.isDownloaded(s.id), isDownloading = downloadManager.isDownloading(s.id),
+            onLike = { library.toggleLike(s); PlaybackService.refreshButtons?.invoke(); songActions = null },
+            onSave = { addToPlaylistSong = s; songActions = null },
+            onDownload = { downloadManager.enqueueTracks(listOf(s)); songActions = null },
+            onRemove = request.onRemove?.let { remove -> { songActions = null; remove() } },
+            onDismiss = { songActions = null }
+        )
+    }
+
+    } // Song actions provider
 }
 
 /** Signed-in YouTube Music library: Liked songs and the user's playlists. */

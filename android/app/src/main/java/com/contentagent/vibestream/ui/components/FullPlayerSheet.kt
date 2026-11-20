@@ -323,12 +323,14 @@ fun FullPlayerSheet(
                         modifier = Modifier.size(26.dp)
                     )
                 }
-                IconButton(onClick = onSleepTimer) {
+                TextButton(onClick = onSleepTimer) {
                     Icon(
                         Icons.Default.Bedtime, contentDescription = "Sleep timer",
                         tint = if (sleepTimerActive) AmberOrange else TextSecondary,
-                        modifier = Modifier.size(26.dp)
+                        modifier = Modifier.size(20.dp)
                     )
+                    Spacer(Modifier.width(6.dp))
+                    Text(if (sleepTimerActive) "Timer on" else "Sleep timer", color = if (sleepTimerActive) AmberOrange else TextSecondary, fontSize = 12.sp)
                 }
                 IconButton(onClick = onEqualizer) {
                     Icon(
@@ -379,6 +381,7 @@ fun FullPlayerSheet(
                                     .clickable { onPlayArtistSong(pick, moreFromArtist) }
                                     .padding(8.dp)
                             ) {
+                                SongOptionsButton(pick)
                                 AsyncImage(
                                     model = pick.thumbnailUrl.ifEmpty { "https://i.ytimg.com/vi/${pick.id}/hqdefault.jpg" },
                                     contentDescription = pick.title,

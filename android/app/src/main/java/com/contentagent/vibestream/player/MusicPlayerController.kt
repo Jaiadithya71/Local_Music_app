@@ -99,42 +99,35 @@ class MusicPlayerController(
     val repeat: StateFlow<Int> = _repeat.asStateFlow()
 
     // ---- Sleep timer (fades volume out over the last 15s, then pauses) ----
-    private var sleepJob: Job? = null
     private val _sleepEndAtMs = MutableStateFlow<Long?>(null)
     val sleepEndAtMs: StateFlow<Long?> = _sleepEndAtMs.asStateFlow()
     private val _sleepEndOfTrack = MutableStateFlow(false)
     val sleepEndOfTrack: StateFlow<Boolean> = _sleepEndOfTrack.asStateFlow()
 
+    private val sleepTimer = SleepTimer(
+        scope = playerScope,
+        onDeadline = { _sleepEndAtMs.value = it },
+        onVolume = { controller?.volume = it },
+        onStop = { controller?.pause() }
+    )
+
     fun setSleepTimerMinutes(minutes: Int) {
         cancelSleepTimer()
-        val endAt = System.currentTimeMillis() + minutes * 60_000L
-        _sleepEndAtMs.value = endAt
-        sleepJob = playerScope.launch {
-            while (isActive) {
-                val remaining = endAt - System.currentTimeMillis()
-                if (remaining <= 0) break
-                if (remaining <= 15_000L) {
-                    controller?.volume = (remaining / 15_000f).coerceIn(0f, 1f)
-                }
-                delay(250)
-            }
-            controller?.pause()
-            controller?.volume = 1f
-            _sleepEndAtMs.value = null
-        }
+        sleepTimer.start(minutes)
     }
 
     fun setSleepEndOfTrack() {
         cancelSleepTimer()
         _sleepEndOfTrack.value = true
+        // Remove the prefetched next media item. Otherwise it may start before
+        // the transition callback can pause it at the song boundary.
+        refreshUpcomingTrack()
     }
 
     fun cancelSleepTimer() {
-        sleepJob?.cancel()
-        sleepJob = null
-        _sleepEndAtMs.value = null
+        sleepTimer.cancel()
         _sleepEndOfTrack.value = false
-        controller?.volume = 1f
+        refreshUpcomingTrack()
     }
 
     // ---- Device volume (synced with the phone's media volume) ----
@@ -302,6 +295,7 @@ class MusicPlayerController(
     private var plannedShuffleNext: Int = -1
 
     private fun computeNextIndex(q: List<Song>, i: Int): Int = when {
+        _sleepEndOfTrack.value -> -1
         _repeat.value == 2 -> -1
         _shuffle.value && q.size > 1 -> {
             if (plannedShuffleNext !in q.indices || plannedShuffleNext == i) {
@@ -391,6 +385,7 @@ class MusicPlayerController(
                         stopProgressTracker()
                         if (_sleepEndOfTrack.value) {
                             _sleepEndOfTrack.value = false
+                            controller?.pause()
                         } else {
                             next()
                         }

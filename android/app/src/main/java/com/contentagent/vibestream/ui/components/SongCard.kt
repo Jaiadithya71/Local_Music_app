@@ -181,5 +181,6 @@ fun SongCard(
                     }
                 }
             }
+            SongOptionsButton(song)
     }
 }

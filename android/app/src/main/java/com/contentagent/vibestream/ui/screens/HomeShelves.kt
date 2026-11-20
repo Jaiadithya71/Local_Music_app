@@ -19,6 +19,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -52,12 +53,13 @@ private object ShelfCache {
     val seen = mutableMapOf<String, MutableSet<String>>()
     val drift = mutableMapOf<String, Int>()
     val loadingMore = mutableStateMapOf<String, Boolean>()
+    val counts = mutableStateMapOf<String, Pair<Int, Int>>()
     var restored = false
 }
 
 internal fun clearShelfMemory() {
     ShelfCache.data.clear(); ShelfCache.pool.clear(); ShelfCache.seen.clear(); ShelfCache.drift.clear()
-    ShelfCache.failed.clear(); ShelfCache.loadingMore.clear()
+    ShelfCache.failed.clear(); ShelfCache.loadingMore.clear(); ShelfCache.counts.clear()
 }
 
 /** Liked artists float up, artists skipped twice or more sink. Stable within a group. */
@@ -114,7 +116,7 @@ private suspend fun loadShelf(ctx: android.content.Context, search: suspend (Str
             .sortedByDescending { shelfPrefs(ctx).getLong("t:$it", 0) }
         oldKeys.drop(63).forEach { edit.remove(it).remove("t:$it"); ShelfCache.data.remove(it); ShelfCache.pool.remove(it); ShelfCache.seen.remove(it); ShelfCache.drift.remove(it) }
         edit.putString(k, com.google.gson.Gson().toJson(clean)).putLong("t:$k", now).apply()
-    } else if (ShelfCache.data[k] == null) {
+    } else {
         ShelfCache.failed[k] = true
     }
 }
@@ -172,6 +174,7 @@ fun HomeShelves(
     extractor: YouTubeExtractor,
     search: suspend (String, Boolean) -> List<Song> = { q, m -> extractor.searchSongs(q, m) },
     related: suspend (String) -> List<Song> = { extractor.relatedSongs(it) },
+    refreshCatalog: () -> Unit = { extractor.clearSearchCaches() },
     currentSongId: String?,
     onPlay: (Song, List<Song>) -> Unit,
     onSeeAll: (String) -> Unit,
@@ -241,16 +244,30 @@ fun HomeShelves(
                     batch.map { q -> async { loadShelf(ctx, search, q, musicOnly, force = forceRefresh) } }.awaitAll()
                 }
             }
-            // A depleted first batch gets one bounded automatic expansion. Never
-            // substitute history on a catalog outage or after exhaustion.
-            val pool = queries.flatMap { ShelfCache.data[cacheKey(it, musicOnly)] ?: emptyList() }
-            if (DiscoveryPolicy.fresh(pool, known, musicOnly = musicOnly).size < 8) {
-                val extra = DiscoveryPolicy.queries(profile.languages, profile.moods, profile.artists, discoveryRound + 1)
-                for (q in extra.filter { it !in seedQueries }) {
-                    loadShelf(ctx, search, q, musicOnly, force = forceRefresh)
-                    val additions = ShelfCache.data[cacheKey(q, musicOnly)] ?: emptyList()
-                    val key = cacheKey(shelfList.first().second, musicOnly)
-                    ShelfCache.data[key] = ((ShelfCache.data[key] ?: emptyList()) + additions).distinctBy { it.id }
+            // Refill depleted categories individually, retaining strict no-replay rules.
+            for (batch in shelfList.chunked(3)) {
+                kotlinx.coroutines.coroutineScope {
+                    batch.map { (_, q) -> async {
+                        val key = cacheKey(q, musicOnly)
+                        var pool = ShelfCache.data[key].orEmpty()
+                        val policy = com.contentagent.vibestream.data.recommendation.ShelfRefillPolicy
+                        if (policy.needsRefill(pool, known, musicOnly)) {
+                            for (variant in policy.queries(q, discoveryRound)) {
+                                loadShelf(ctx, search, variant, musicOnly, force = forceRefresh)
+                                pool = policy.merge(pool, ShelfCache.data[cacheKey(variant, musicOnly)].orEmpty())
+                                if (!policy.needsRefill(pool, known, musicOnly)) break
+                            }
+                            if (pool.isNotEmpty()) {
+                                ShelfCache.pool[key] = pool
+                                ShelfCache.data[key] = pool
+                                shelfPrefs(ctx).edit().putString(key, com.google.gson.Gson().toJson(pool))
+                                    .putLong("t:$key", System.currentTimeMillis()).apply()
+                            }
+                        }
+                        val eligible = DiscoveryPolicy.fresh(pool, emptySet(), limit = pool.size, musicOnly = musicOnly).size
+                        ShelfCache.counts[key] = pool.size to eligible
+                        android.util.Log.d("VibeStreamShelves", "shelf=${q.hashCode()} fetched=${pool.size} eligible=$eligible knownKeys=${known.size} visible=${DiscoveryPolicy.fresh(pool, known, musicOnly = musicOnly).size} refresh=$forceRefresh")
+                    } }.awaitAll()
                 }
             }
         } finally { refreshing = false; forceRefresh = false }
@@ -270,6 +287,7 @@ fun HomeShelves(
                         shelfPrefs(ctx).edit().clear().commit()
                     }
                     coil.Coil.imageLoader(ctx).memoryCache?.clear()
+                    refreshCatalog()
                     clearShelfMemory()
                     radioSongs = emptyList(); cacheEpoch++; discoveryRound++; forceRefresh = true
                     cacheDialog = false
@@ -277,7 +295,7 @@ fun HomeShelves(
             }) { Text("Clear cache") } },
             dismissButton = { androidx.compose.material3.TextButton(onClick = { cacheDialog = false }) { Text("Keep cache") } })
     }
-    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
+    LazyColumn(modifier = Modifier.fillMaxSize().testTag("home-shelves"), contentPadding = PaddingValues(bottom = 16.dp)) {
         item {
             Row(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
@@ -339,6 +357,7 @@ fun HomeShelves(
                 empty = moodMix.isEmpty(),
                 onRefresh = {
                     if (!refreshing) {
+                        refreshCatalog()
                         refreshing = true
                         forceRefresh = true
                         discoveryRound++
@@ -443,12 +462,13 @@ fun HomeShelves(
                                         .background(DarkSurfaceElevated)
                                 )
                                 Spacer(Modifier.width(10.dp))
-                                Column {
+                                Column(Modifier.weight(1f)) {
                                     Text(song.title, color = if (song.id == currentSongId) AmberOrange else TextPrimary,
                                         fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     Spacer(Modifier.height(2.dp))
                                     Text(song.artist, color = TextSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
+                                com.contentagent.vibestream.ui.components.SongOptionsButton(song)
                             }
                         }
                     }
@@ -475,7 +495,7 @@ fun HomeShelves(
                         if (failed) {
                             Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
                                 Text("Could not load this shelf", color = TextSecondary, fontSize = 13.sp)
-                                androidx.compose.material3.TextButton(onClick = { scope.launch { loadShelf(ctx, search, query, musicOnly) } }) {
+                                androidx.compose.material3.TextButton(onClick = { refreshCatalog(); forceRefresh = true; discoveryRound++ }) {
                                     Text("Retry", color = AmberOrange)
                                 }
                             }
@@ -484,7 +504,16 @@ fun HomeShelves(
                         }
                     }
                 } else if (list.isEmpty()) {
-                    Text("No new-to-you picks in this shelf. Refresh for more.", color = TextSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp))
+                    val counts = ShelfCache.counts[cacheKey(query, musicOnly)]
+                    val message = when {
+                        failed -> "Could not refresh this shelf. Try again."
+                        counts?.second == 0 && counts.first > 0 -> "No eligible songs in these results. Try more picks."
+                        else -> "These picks are already in your listening history or library. Try more picks."
+                    }
+                    Text(message, color = TextSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp))
+                    androidx.compose.material3.TextButton(enabled = !refreshing, onClick = {
+                        refreshCatalog(); forceRefresh = true; discoveryRound++
+                    }, modifier = Modifier.padding(horizontal = 8.dp)) { Text("More picks", color = AmberOrange) }
                 } else {
                     LazyRow(
                         contentPadding = PaddingValues(horizontal = 16.dp),
@@ -494,7 +523,12 @@ fun HomeShelves(
                             Column(
                                 modifier = Modifier.width(140.dp).clickable { onPlay(song, list) }
                             ) {
-                                ShelfArtwork(song)
+                                Box {
+                                    ShelfArtwork(song)
+                                    Box(Modifier.align(androidx.compose.ui.Alignment.TopEnd).background(DarkBackground.copy(alpha = 0.8f), RoundedCornerShape(24.dp))) {
+                                        com.contentagent.vibestream.ui.components.SongOptionsButton(song)
+                                    }
+                                }
                                 Spacer(Modifier.height(8.dp))
                                 Text(
                                     song.title,

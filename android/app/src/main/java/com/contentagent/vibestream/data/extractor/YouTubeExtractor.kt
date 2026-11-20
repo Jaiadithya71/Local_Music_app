@@ -395,6 +395,13 @@ class YouTubeExtractor {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<Long, List<String>>>?) = size > 32
     }
 
+    /** Explicit refresh and sign-in changes must not reuse anonymous/stale pools. */
+    fun clearSearchCaches() {
+        memCache.clear()
+        sectionsCache.clear()
+        searchCache?.clear()
+    }
+
     /**
      * Searches YouTube for music tracks matching the given query.
      * Answers from the session cache (30 min) or the disk cache (24 h) when fresh.

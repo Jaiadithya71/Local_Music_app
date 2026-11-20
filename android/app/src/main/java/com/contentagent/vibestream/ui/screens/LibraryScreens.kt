@@ -127,6 +127,7 @@ private fun SongRow(song: Song, active: Boolean, onClick: () -> Unit, trailing: 
             Text(song.artist, color = TextSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         trailing?.invoke()
+        if (trailing == null) com.contentagent.vibestream.ui.components.SongOptionsButton(song)
     }
 }
 
@@ -149,7 +150,7 @@ fun LibrarySection(
     var showNew by remember { mutableStateOf(false) }
 
     when (section) {
-        1 -> SongList(liked, "Songs you like appear here. Tap the heart in Now Playing.", currentSongId, onPlay)
+        1 -> SongList(liked, "Songs you like appear here. Use any song's actions menu.", currentSongId, onPlay)
         3 -> SongList(recent, "Nothing played yet.", currentSongId, onPlay)
         else -> {
             val open = playlists.firstOrNull { it.name == openPlaylist }
@@ -248,7 +249,7 @@ fun PlaylistDetail(
         }
         Text("Saves audio on this device. Uses your current connection. Keep the app open until finished.",
             color = TextTertiary, fontSize = 11.sp, modifier = Modifier.padding(vertical = 8.dp))
-        if (playlist.songs.isEmpty()) Text("Empty. Add songs from Now Playing.", color = TextTertiary, modifier = Modifier.padding(16.dp))
+        if (playlist.songs.isEmpty()) Text("Empty. Add songs using a song's actions menu.", color = TextTertiary, modifier = Modifier.padding(16.dp))
         LazyColumn {
             items(playlist.songs, key = { it.id }) { song ->
                 Column {
@@ -264,17 +265,8 @@ fun PlaylistDetail(
                         }
                         // Remove lives behind an overflow menu plus a confirm, so a
                         // stray tap can never drop a song (Jai's 2026-11-18 ask).
-                        var menuOpen by remember(song.id) { mutableStateOf(false) }
                         var confirmRemove by remember(song.id) { mutableStateOf(false) }
-                        Box {
-                            IconButton(onClick = { menuOpen = true }) { Icon(Icons.Default.MoreVert, "Options: ${song.title}", tint = TextSecondary) }
-                            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                                DropdownMenuItem(
-                                    text = { Text("Remove from playlist") },
-                                    onClick = { menuOpen = false; confirmRemove = true }
-                                )
-                            }
-                        }
+                        com.contentagent.vibestream.ui.components.SongOptionsButton(song, onRemove = { confirmRemove = true })
                         if (confirmRemove) {
                             AlertDialog(
                                 onDismissRequest = { confirmRemove = false },
@@ -406,10 +398,11 @@ fun QueueDialog(queue: List<Song>, index: Int, onPick: (Int) -> Unit, onDismiss:
                             modifier = Modifier.size(40.dp).clip(RoundedCornerShape(6.dp))
                         )
                         Spacer(Modifier.width(10.dp))
-                        Column {
+                        Column(Modifier.weight(1f)) {
                             Text(s.title, color = if (i == index) AmberOrange else TextPrimary, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(s.artist, color = TextSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
+                        com.contentagent.vibestream.ui.components.SongOptionsButton(s)
                     }
                 }
             }

@@ -31,6 +31,9 @@ class SearchCacheStore(context: Context) {
         }
     }
 
+    /** Disposable catalog results only; never touches the user's library or history. */
+    fun clear() { prefs.edit().clear().commit() }
+
     fun put(query: String, musicOnly: Boolean, songs: List<Song>) {
         if (songs.isEmpty()) return
         try {

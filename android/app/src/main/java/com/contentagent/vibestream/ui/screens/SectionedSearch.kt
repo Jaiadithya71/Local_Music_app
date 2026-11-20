@@ -208,6 +208,7 @@ private fun TopResultHero(song: Song, onPlay: () -> Unit) {
                 maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(song.artist, color = TextSecondary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
+        com.contentagent.vibestream.ui.components.SongOptionsButton(song)
         Icon(Icons.Default.PlayCircle, contentDescription = "Play", tint = AmberOrange, modifier = Modifier.size(40.dp))
     }
 }

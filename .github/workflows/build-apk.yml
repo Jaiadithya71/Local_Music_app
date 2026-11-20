@@ -40,13 +40,13 @@ jobs:
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon testDebugUnitTest --tests '*GoogleDeviceAuthTest' --tests '*SongSeedPolicyTest' --tests '*RelatedSongCacheTest' --tests '*MusicSearchPolicyTest' --tests '*DiscoveryPolicyTest' --tests '*DiscoveryHomeTest' --tests '*QueueReconnectTest' --tests '*PersistenceTest' --tests '*MixBuilderTest' --tests '*PlaybackCacheTest' --tests '*DeviceVolumeTest' --tests '*SlowRadioHomeTest' --tests '*BackupImportSeedsTest' --tests '*PlaylistDownloadTest' --tests '*TrackDownloadQueueTest' --tests '*StreamUrlStoreTest'
+          ./gradlew --no-daemon testDebugUnitTest --tests '*SleepTimerTest' --tests '*ShelfRefreshTest' --tests '*GoogleDeviceAuthTest' --tests '*SongSeedPolicyTest' --tests '*RelatedSongCacheTest' --tests '*MusicSearchPolicyTest' --tests '*DiscoveryPolicyTest' --tests '*DiscoveryHomeTest' --tests '*QueueReconnectTest' --tests '*PersistenceTest' --tests '*MixBuilderTest' --tests '*PlaybackCacheTest' --tests '*DeviceVolumeTest' --tests '*SlowRadioHomeTest' --tests '*BackupImportSeedsTest' --tests '*PlaylistDownloadTest' --tests '*TrackDownloadQueueTest' --tests '*StreamUrlStoreTest'
       # UI rendering runs in its own Gradle invocation: sharing one JVM let a
       # leaked coroutine from the ActivityScenario tests fail SlowRadioHomeTest
       # with UncaughtExceptionsBeforeTest (run 42339918221).
       - name: UI render regression
         working-directory: android
-        run: ./gradlew --no-daemon testDebugUnitTest --tests '*RenderTest' --tests '*PlaylistDownloadTest'
+        run: ./gradlew --no-daemon testDebugUnitTest --tests '*SleepTimerUiTest' --tests '*SongActionsTest' --tests '*LibraryAccountMenuTest' --tests '*RenderTest' --tests '*PlaylistDownloadTest'
       - uses: actions/upload-artifact@v4
         if: always()
         with:
