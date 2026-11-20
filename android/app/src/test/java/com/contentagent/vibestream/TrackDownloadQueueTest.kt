@@ -14,7 +14,7 @@ class TrackDownloadQueueTest {
         val transferred = mutableListOf<String>()
         val queued = mutableListOf<String>()
         val saved = mutableSetOf("saved")
-        val queue = TrackDownloadQueue(scope, { it in saved }, { queued.add(it) }) { song ->
+        val queue = TrackDownloadQueue(scope, { it in saved }, { queued.add(it.id) }) { song ->
             transferred.add(song.id)
             if (song.id == "a") gate.await()
             saved.add(song.id)

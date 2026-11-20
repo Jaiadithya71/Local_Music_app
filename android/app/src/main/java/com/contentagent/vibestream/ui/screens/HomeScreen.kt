@@ -145,6 +145,7 @@ fun HomeScreen(
     val downloadedSongs by offlineStorage.downloadedSongs.collectAsState()
     val downloadProgressMap by downloadManager.downloadProgressMap.collectAsState()
     val downloadErrors by downloadManager.downloadErrors.collectAsState()
+    val downloadTransfers by downloadManager.downloadTransfers.collectAsState()
     val currentSong by playerController.currentSong.collectAsState()
     val isPlaying by playerController.isPlaying.collectAsState()
     val isBuffering by playerController.isBuffering.collectAsState()
@@ -741,91 +742,23 @@ fun HomeScreen(
                             downloadedIds = downloadedSongs.map { it.id }.toSet(),
                             downloadProgress = downloadProgressMap,
                             downloadErrors = downloadErrors,
+                            downloadTransfers = downloadTransfers,
                             onDownload = { downloadManager.enqueueTracks(it) },
                             onPlay = { sg, ctx -> playerController.playSong(offlineStorage.getLocalSong(sg.id) ?: sg, ctx) }
                         )
                     }
                 } else
                 // DOWNLOADS / OFFLINE TAB
-                Column(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                    if (downloadedSongs.isEmpty()) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.padding(32.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.FolderOff,
-                                    contentDescription = null,
-                                    tint = DarkSurfaceBorder,
-                                    modifier = Modifier.size(64.dp)
-                                )
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Text(
-                                    text = "No Offline Tracks Saved",
-                                    color = TextPrimary,
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 16.sp
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = "Songs downloaded from the Discover tab are stored locally on your device for offline listening without internet.",
-                                    color = TextTertiary,
-                                    fontSize = 13.sp,
-                                    textAlign = TextAlign.Center
-                                )
-                            }
-                        }
-                    } else {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Stored on Device (${downloadedSongs.size} tracks)",
-                                color = TextSecondary,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-
-                        LazyColumn(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f),
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            items(downloadedSongs, key = { it.id }) { song ->
-                                val isCurrent = currentSong?.id == song.id
-
-                                SongCard(
-                                    song = song,
-                                    isCurrentSong = isCurrent,
-                                    isPlaying = isCurrent && isPlaying,
-                                    isDownloading = false,
-                                    downloadProgress = 1f,
-                                    isDownloaded = true,
-                                    onPlayClick = {
-                                        playerController.playSong(song, downloadedSongs)
-                                    },
-                                    onDownloadClick = {},
-                                    onDeleteClick = {
-                                        offlineStorage.removeSong(song.id)
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
+                DownloadsPane(
+                    saved = downloadedSongs,
+                    transfers = downloadTransfers.values.toList(),
+                    currentSongId = currentSong?.id,
+                    isPlaying = isPlaying,
+                    onPlay = { playerController.playSong(it, downloadedSongs) },
+                    onRetry = { downloadManager.enqueueTracks(listOf(it)) },
+                    onDelete = { offlineStorage.removeSong(it.id) },
+                    modifier = Modifier.fillMaxWidth().weight(1f)
+                )
               }
             } else {
                 HomeShelves(

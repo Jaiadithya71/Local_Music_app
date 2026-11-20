@@ -9,7 +9,7 @@ import kotlinx.coroutines.launch
 class TrackDownloadQueue(
     scope: CoroutineScope,
     private val isSaved: (String) -> Boolean,
-    private val onQueued: (String) -> Unit,
+    private val onQueued: (Song) -> Unit,
     private val transfer: suspend (Song) -> Unit
 ) {
     private val pending = mutableSetOf<String>()
@@ -25,7 +25,7 @@ class TrackDownloadQueue(
     fun enqueue(songs: List<Song>) = synchronized(pending) {
         songs.forEach { song ->
             if (!isSaved(song.id) && pending.add(song.id)) {
-                onQueued(song.id)
+                onQueued(song)
                 channel.trySend(song)
             }
         }
