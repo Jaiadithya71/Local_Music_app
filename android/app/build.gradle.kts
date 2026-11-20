@@ -136,4 +136,9 @@ dependencies {
 
 tasks.withType<Test>().configureEach {
     maxHeapSize = "768m"
+    // Robolectric retains native/Compose state across classes. A fresh process
+    // per class bounds memory and prevents one render's coroutines leaking into
+    // the next test. Keep all assertions and run classes sequentially.
+    forkEvery = 1L
+    maxParallelForks = 1
 }
