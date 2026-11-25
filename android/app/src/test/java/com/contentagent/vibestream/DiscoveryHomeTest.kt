@@ -133,18 +133,21 @@ class DiscoveryHomeTest {
         val key = "discovery-v4|M|Tamil new releases"
         ctx.getSharedPreferences("vibestream_shelves", 0).edit()
             .putString(key, com.google.gson.Gson().toJson(stale)).putLong("t:$key", System.currentTimeMillis()).commit()
-        val freshPool = (1..8).map { Song("fresh$it", "Fresh song $it", "Artist $it") }
+        // Query-scoped titles: one unique node per shelf.
         var fetched = false
         compose.setContent {
             VibeStreamTheme {
-                HomeShelves(YouTubeExtractor(), search = { q, _ -> if (q == "Tamil new releases") fetched = true; freshPool },
-                    related = { emptyList() }, currentSongId = null, onPlay = { _, _ -> }, onSeeAll = {})
+                HomeShelves(YouTubeExtractor(), search = { q, _ ->
+                    if (q == "Tamil new releases") fetched = true
+                    (1..8).map { Song("$q-fresh$it", "$q fresh song $it", "Artist $it") }
+                }, related = { emptyList() }, currentSongId = null, onPlay = { _, _ -> }, onSeeAll = {})
             }
         }
         compose.waitForIdle()
         compose.runOnIdle { assertTrue(fetched) }
-        compose.onNodeWithTag("home-shelves").performScrollToNode(hasText("Fresh song 1"))
-        compose.onNodeWithText("Fresh song 1").assertIsDisplayed()
+        compose.onAllNodesWithText("Non stop jukebox 1").assertCountEquals(0)
+        compose.onNodeWithTag("home-shelves").performScrollToNode(hasText("Tamil hit songs fresh song 1"))
+        compose.onNodeWithText("Tamil hit songs fresh song 1").assertIsDisplayed()
     }
 
     @Test fun warmHomeUsesSavedPoolsAndClearPreservesLibrary() {
