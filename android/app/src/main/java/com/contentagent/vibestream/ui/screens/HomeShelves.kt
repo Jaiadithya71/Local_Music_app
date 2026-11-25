@@ -43,9 +43,12 @@ private val shelves = listOf(
     "Workout" to "workout songs"
 )
 
-private object ShelfCache {
+internal object ShelfCache {
     val data = mutableStateMapOf<String, List<Song>>()
     val failed = mutableStateMapOf<String, Boolean>()
+    // Shelves where "Show more" found nothing new; the card says so instead of
+    // looking dead.
+    val depleted = mutableStateMapOf<String, Boolean>()
     // Full fetched result pool per shelf (the UI shows a ranked window of it),
     // ids already shown this session, a drift counter for refill queries, and a
     // loading flag for the "Show more" card.
@@ -59,11 +62,11 @@ private object ShelfCache {
 
 internal fun clearShelfMemory() {
     ShelfCache.data.clear(); ShelfCache.pool.clear(); ShelfCache.seen.clear(); ShelfCache.drift.clear()
-    ShelfCache.failed.clear(); ShelfCache.loadingMore.clear(); ShelfCache.counts.clear()
+    ShelfCache.failed.clear(); ShelfCache.loadingMore.clear(); ShelfCache.counts.clear(); ShelfCache.depleted.clear()
 }
 
 /** Liked artists float up, artists skipped twice or more sink. Stable within a group. */
-private fun rankForTaste(items: List<Song>, likedArtists: Set<String>, skippedArtists: Set<String>): List<Song> {
+internal fun rankForTaste(items: List<Song>, likedArtists: Set<String>, skippedArtists: Set<String>): List<Song> {
     return items.sortedBy {
         when {
             likedArtists.contains(it.artist) -> 0
@@ -73,10 +76,10 @@ private fun rankForTaste(items: List<Song>, likedArtists: Set<String>, skippedAr
     }
 }
 
-private fun shelfPrefs(ctx: android.content.Context) =
+internal fun shelfPrefs(ctx: android.content.Context) =
     ctx.getSharedPreferences("vibestream_shelves", android.content.Context.MODE_PRIVATE)
 
-private fun cacheKey(query: String, musicOnly: Boolean) = "discovery-v4|" + (if (musicOnly) "M|" else "A|") + query
+internal fun cacheKey(query: String, musicOnly: Boolean) = "discovery-v4|" + (if (musicOnly) "M|" else "A|") + query
 
 private fun restoreShelves(ctx: android.content.Context, queries: List<String>, musicOnly: Boolean) {
     val gson = com.google.gson.Gson()
@@ -100,9 +103,10 @@ private fun restoreShelves(ctx: android.content.Context, queries: List<String>, 
 }
 
 /** Fetches a shelf, keeps showing cached songs if the refresh fails. */
-private suspend fun loadShelf(ctx: android.content.Context, search: suspend (String, Boolean) -> List<Song>, query: String, musicOnly: Boolean, force: Boolean = false) {
+internal suspend fun loadShelf(ctx: android.content.Context, search: suspend (String, Boolean) -> List<Song>, query: String, musicOnly: Boolean, force: Boolean = false) {
     val k = cacheKey(query, musicOnly)
     ShelfCache.failed.remove(k)
+    ShelfCache.depleted.remove(k)
     val now = System.currentTimeMillis()
     if (!force && ShelfCache.data[k]?.isNotEmpty() == true &&
         now - shelfPrefs(ctx).getLong("t:$k", 0) in 0 until 21_600_000L) return
@@ -140,28 +144,32 @@ private var skippedArtistsProvider: () -> Set<String> = { emptySet() }
  * most-liked artist, then "new ...") so the shelf keeps serving fresh picks
  * instead of the same static list.
  */
-private suspend fun showMore(ctx: android.content.Context, search: suspend (String, Boolean) -> List<Song>, query: String, musicOnly: Boolean, driftArtist: String?) {
+internal suspend fun showMore(ctx: android.content.Context, search: suspend (String, Boolean) -> List<Song>, query: String, musicOnly: Boolean, driftArtist: String?) {
     val k = cacheKey(query, musicOnly)
     if (ShelfCache.loadingMore[k] == true) return
     ShelfCache.loadingMore[k] = true
     try {
-        val seenSet = ShelfCache.seen.getOrPut(k) {
-            (ShelfCache.data[k]?.map { it.id } ?: emptyList()).toMutableSet()
-        }
-        var more = (ShelfCache.pool[k] ?: emptyList()).filter { it.id !in seenSet }
+        val dataIds = (ShelfCache.data[k] ?: emptyList()).map { it.id }.toHashSet()
+        val seenSet = ShelfCache.seen.getOrPut(k) { dataIds.toMutableSet() }
+        // Only songs not already on the shelf; the shelf renders the full pool,
+        // so appending pool members again was a silent no-op.
+        var more = (ShelfCache.pool[k] ?: emptyList()).filter { it.id !in seenSet && it.id !in dataIds }
         var attempts = 0
-        while (more.isEmpty() && attempts < 3) {
+        val artist = driftArtist
+            ?: ShelfCache.data[k]?.firstOrNull()?.artist?.takeIf { it.isNotBlank() && it != "Unknown Artist" && it != "YouTube" }
+        while (more.isEmpty() && attempts < 4) {
             val d = ShelfCache.drift[k] ?: 0
             ShelfCache.drift[k] = d + 1
-            val q2 = when (d) {
-                0 -> query
-                1 -> "$query mix"
-                else -> driftArtist?.let { "$it songs" } ?: "new $query"
+            val q2 = when (d % 4) {
+                0 -> "$query mix"
+                1 -> artist?.let { "$it songs" } ?: "new $query"
+                2 -> "new $query"
+                else -> "$query latest"
             }
             val result: List<Song> = try {
                 kotlinx.coroutines.withTimeout(20_000) { search(q2, musicOnly) }
             } catch (e: Exception) { emptyList() }
-            val existing = (ShelfCache.pool[k] ?: emptyList()).map { it.id }.toHashSet()
+            val existing = (ShelfCache.pool[k] ?: emptyList()).map { it.id }.toHashSet() + dataIds
             val fresh = result.map { it.copy(streamUrl = null) }.filter { it.id !in seenSet && it.id !in existing }
             ShelfCache.pool[k] = (ShelfCache.pool[k] ?: emptyList()) + fresh
             more = fresh
@@ -171,6 +179,9 @@ private suspend fun showMore(ctx: android.content.Context, search: suspend (Stri
         if (take.isNotEmpty()) {
             seenSet.addAll(take.map { it.id })
             ShelfCache.data[k] = (ShelfCache.data[k] ?: emptyList()) + take
+            ShelfCache.depleted.remove(k)
+        } else {
+            ShelfCache.depleted[k] = true
         }
     } finally {
         ShelfCache.loadingMore.remove(k)
@@ -186,7 +197,7 @@ fun HomeShelves(
     refreshCatalog: () -> Unit = { extractor.clearSearchCaches() },
     currentSongId: String?,
     onPlay: (Song, List<Song>) -> Unit,
-    onSeeAll: (String) -> Unit,
+    onSeeAll: (String, String) -> Unit,
     recent: List<Song> = emptyList(),
     playedKeys: Set<String> = emptySet(),
     liked: List<Song> = emptyList(),
@@ -509,13 +520,23 @@ fun HomeShelves(
             val songs = base?.let { DiscoveryPolicy.fresh(it, known, skippedArtists, limit = it.size, musicOnly = musicOnly) }
             val failed = ShelfCache.failed[cacheKey(query, musicOnly)] == true
             Column(modifier = Modifier.padding(top = 20.dp)) {
-                Text(
-                    text = title,
-                    color = TextPrimary,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
+                Row(
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSeeAll(title, query) }
+                        .padding(horizontal = 16.dp)
+                        .testTag("shelf-title-$title")
+                ) {
+                    Text(
+                        text = title,
+                        color = TextPrimary,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text("›", color = TextSecondary, fontSize = 20.sp)
+                }
                 Spacer(Modifier.height(10.dp))
                 val list = songs
                 if (list == null) {
@@ -579,13 +600,14 @@ fun HomeShelves(
                         item {
                             val k = cacheKey(query, musicOnly)
                             val loading = ShelfCache.loadingMore[k] == true
+                            val depleted = ShelfCache.depleted[k] == true
                             Column(
                                 modifier = Modifier
                                     .width(96.dp)
                                     .height(190.dp)
                                     .clip(RoundedCornerShape(6.dp))
                                     .background(DarkSurfaceElevated)
-                                    .clickable(enabled = !loading) {
+                                    .clickable(enabled = !loading && !depleted) {
                                         scope.launch { showMore(ctx, search, query, musicOnly, null) }
                                     }
                                     .padding(8.dp),
@@ -594,6 +616,8 @@ fun HomeShelves(
                             ) {
                                 if (loading) {
                                     CircularProgressIndicator(color = AmberOrange, modifier = Modifier.size(22.dp))
+                                } else if (depleted) {
+                                    Text("No new picks right now", color = TextSecondary, fontSize = 11.sp)
                                 } else {
                                     Text("+", color = AmberOrange, fontSize = 28.sp, fontWeight = FontWeight.Bold)
                                     Spacer(Modifier.height(6.dp))

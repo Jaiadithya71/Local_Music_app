@@ -38,7 +38,7 @@ class ShelfRefreshTest {
      queries.add(q)
      if(q=="Tamil hit songs" || q=="Hindi hit songs") listOf(old)
      else (1..8).map { Song("$q-$it", "${if (q.startsWith("Hindi")) "Hindi" else "Tamil"} discovery $it", "Artist $it") }
-    }, related={emptyList()},refreshCatalog={clears++},currentSongId=null,onPlay={_,_->},onSeeAll={},playedKeys=DiscoveryPolicy.keys(old))
+    }, related={emptyList()},refreshCatalog={clears++},currentSongId=null,onPlay={_,_->},onSeeAll={_,_->},playedKeys=DiscoveryPolicy.keys(old))
     }
     }
    }
@@ -73,7 +73,7 @@ class ShelfRefreshTest {
     androidx.compose.runtime.CompositionLocalProvider(com.contentagent.vibestream.ui.components.LocalSongActions provides {}) {
      HomeShelves(YouTubeExtractor(), search={q,_->
       (1..8).map { Song("$q-$it", "$q upload $it", "Singer $it", durationSec = if(emptyResults) 3600 else 240, kind="video") }
-     },related={emptyList()},currentSongId=null,onPlay={_,_->},onSeeAll={},playedKeys=known)
+     },related={emptyList()},currentSongId=null,onPlay={_,_->},onSeeAll={_,_->},playedKeys=known)
     }
    }
   } }

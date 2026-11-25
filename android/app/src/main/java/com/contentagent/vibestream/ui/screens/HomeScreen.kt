@@ -67,6 +67,8 @@ fun HomeScreen(
     val focusManager = LocalFocusManager.current
 
     var selectedTab by remember { mutableStateOf(0) } // 0 = Home, 1 = Find, 2 = Library
+    // Open category page (title to query); null means the normal tab content.
+    var openShelf by remember { mutableStateOf<Pair<String, String>?>(null) }
     var searchQuery by remember { mutableStateOf("") }
     var isSearching by remember { mutableStateOf(false) }
     var searchResults by remember { mutableStateOf<List<Song>>(emptyList()) }
@@ -319,7 +321,7 @@ fun HomeScreen(
                 for ((label, icon, idx) in items) {
                     NavigationBarItem(
                         selected = selectedTab == idx,
-                        onClick = { selectedTab = idx },
+                        onClick = { selectedTab = idx; openShelf = null },
                         icon = { Icon(icon, contentDescription = label) },
                         label = { Text(if (idx == 2) "Library (${downloadedSongs.size})" else label, fontSize = 11.sp) },
                         colors = NavigationBarItemDefaults.colors(
@@ -418,6 +420,18 @@ fun HomeScreen(
                     ytmSignedIn = YtMusicAuth.isSignedIn()
                     extractor.authRejected = false
                 })
+            } else if (openShelf != null) {
+                val (shelfTitle, shelfQuery) = openShelf!!
+                ShelfScreen(
+                    title = shelfTitle,
+                    query = shelfQuery,
+                    extractor = extractor,
+                    musicOnly = musicOnly,
+                    currentSongId = currentSong?.id,
+                    known = playedKeys,
+                    onPlay = { sg, ctx2 -> playerController.playSong(sg, ctx2, discovery = true) },
+                    onBack = { openShelf = null }
+                )
             } else if (selectedTab == 1) {
                 // DISCOVER TAB
                 Column(modifier = Modifier.fillMaxSize()) {
@@ -776,7 +790,7 @@ fun HomeScreen(
                     extractor = extractor,
                     currentSongId = currentSong?.id,
                     onPlay = { sg, ctx -> playerController.playSong(sg, ctx, discovery = true) },
-                    onSeeAll = { q -> selectedTab = 1; searchQuery = q; performSearch(q) },
+                    onSeeAll = { t, q -> openShelf = t to q },
                     skippedArtists = artistSkips.filterValues { it >= 2 }.keys,
                     onSongsVisible = { songs -> playerController.prefetchVisible(songs.take(4)) }
                 )

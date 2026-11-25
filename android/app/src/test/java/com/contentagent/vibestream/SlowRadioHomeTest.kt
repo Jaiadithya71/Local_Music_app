@@ -48,7 +48,7 @@ class SlowRadioHomeTest {
                     YouTubeExtractor(),
                     search = { _, _ -> fresh },
                     related = { never.await() }, // stalled radio
-                    currentSongId = null, onPlay = { _, _ -> }, onSeeAll = {},
+                    currentSongId = null, onPlay = { _, _ -> }, onSeeAll = { _, _ -> },
                     liked = listOf(liked),
                     onPlayMood = { moodQueue = it })
             }

@@ -41,7 +41,7 @@ class DiscoveryHomeTest {
             VibeStreamTheme {
                 androidx.compose.material3.Surface(color = com.contentagent.vibestream.ui.theme.DarkBackground) {
                 HomeShelves(YouTubeExtractor(), related = { emptyList() }, search = { q, _ -> queries.add(q); listOf(old, liked) + fresh },
-                    currentSongId = null, onPlay = { _, q -> queue = q }, onSeeAll = {},
+                    currentSongId = null, onPlay = { _, q -> queue = q }, onSeeAll = { _, _ -> },
                     recent = listOf(old), liked = listOf(liked), playedKeys = known.value,
                     onPlayMood = { queue = it })
                 }
@@ -84,7 +84,7 @@ class DiscoveryHomeTest {
             VibeStreamTheme {
                 androidx.compose.material3.Surface(color = com.contentagent.vibestream.ui.theme.DarkBackground) {
                     HomeShelves(YouTubeExtractor(), related = { emptyList() }, search = { _, _ -> listOf(old) },
-                        currentSongId = null, onPlay = { _, q -> queue = q }, onSeeAll = {},
+                        currentSongId = null, onPlay = { _, q -> queue = q }, onSeeAll = { _, _ -> },
                         recent = listOf(old), playedKeys = DiscoveryPolicy.keys(old), onPlayMood = { queue = it })
                 }
             }
@@ -108,7 +108,7 @@ class DiscoveryHomeTest {
             VibeStreamTheme {
                 HomeShelves(YouTubeExtractor(), search = { _, _ -> listOf(Song("sssssssssss", "Search discovery", "Third singer")) },
                     related = { listOf(seed, related, Song("ppppppppppp", "Podcast", "Talk")) },
-                    currentSongId = null, onPlay = { _, q -> queue = q }, onSeeAll = {},
+                    currentSongId = null, onPlay = { _, q -> queue = q }, onSeeAll = { _, _ -> },
                     liked = listOf(seed), onPlayMood = { queue = it })
             }
         }
@@ -140,7 +140,7 @@ class DiscoveryHomeTest {
                 HomeShelves(YouTubeExtractor(), search = { q, _ ->
                     if (q == "Tamil new releases") fetched = true
                     (1..8).map { Song("$q-fresh$it", "$q fresh song $it", "Artist $it") }
-                }, related = { emptyList() }, currentSongId = null, onPlay = { _, _ -> }, onSeeAll = {})
+                }, related = { emptyList() }, currentSongId = null, onPlay = { _, _ -> }, onSeeAll = { _, _ -> })
             }
         }
         compose.waitForIdle()
@@ -168,7 +168,7 @@ class DiscoveryHomeTest {
         compose.setContent {
             VibeStreamTheme {
                 HomeShelves(YouTubeExtractor(), search = { q, _ -> if (q == "Tamil new releases") cachedQueryFetched = true; pool },
-                    related = { emptyList() }, currentSongId = null, onPlay = { _, _ -> }, onSeeAll = {})
+                    related = { emptyList() }, currentSongId = null, onPlay = { _, _ -> }, onSeeAll = { _, _ -> })
             }
         }
         compose.waitForIdle()
