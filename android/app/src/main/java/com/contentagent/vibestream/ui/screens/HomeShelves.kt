@@ -215,7 +215,9 @@ fun HomeShelves(
     val ctx = androidx.compose.ui.platform.LocalContext.current
     // Taste onboarding answers seed the shelves; defaults when skipped.
     val profile = remember { com.contentagent.vibestream.data.local.TasteStore(ctx).load() }
-    likedArtistsProvider = { liked.map { it.artist }.toSet() }
+    // Taste = liked songs + everything in his playlists, per his instruction.
+    val tasteArtists = (liked + playlists.flatMap { it.songs }).map { it.artist }.toSet()
+    likedArtistsProvider = { tasteArtists }
     skippedArtistsProvider = { skippedArtists }
     val tasteShelves = profile.languages.take(2).map { "$it hits" to "$it hit songs" } +
         profile.moods.take(2).map { mood ->
@@ -240,7 +242,9 @@ fun HomeShelves(
     val radioSeeds = com.contentagent.vibestream.data.recommendation.SongSeedPolicy.seeds(liked, playlists.flatMap { it.songs }, discoveryRound)
     val keywordPool = shelfList.flatMap { ShelfCache.data[cacheKey(it.second, musicOnly)] ?: emptyList() } + seedSongs
     val discoveryPool = com.contentagent.vibestream.data.recommendation.SongSeedPolicy.blend(radioSongs, keywordPool, profile.languages)
-    val moodMix = DiscoveryPolicy.fresh(discoveryPool, known, skippedArtists, musicOnly = musicOnly)
+    // "Your mood": the new-to-you pool ranked by taste first, so the mix leads
+    // with artists he already loves instead of a flat shuffle of strangers.
+    val moodMix = DiscoveryPolicy.fresh(rankForTaste(discoveryPool, tasteArtists, skippedArtists), known, skippedArtists, musicOnly = musicOnly)
     // Show cached shelves instantly, then refresh one at a time in the background.
     LaunchedEffect(shelfList, musicOnly, discoveryRound, radioSeeds.map { it.id }, cacheEpoch) {
         refreshing = true

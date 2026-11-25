@@ -56,6 +56,37 @@ class ShelfPageTest {
   compose.onNodeWithText("tamil workout songs mix track 1").assertExists()
  }
 
+ @Test fun yourMoodLeadsWithLikedAndPlaylistArtists() {
+  val ctx=ApplicationProvider.getApplicationContext<Context>()
+  ctx.getSharedPreferences("vibestream_shelves",0).edit().clear().commit()
+  com.contentagent.vibestream.ui.screens.clearShelfMemory()
+  TasteStore(ctx).save(TasteProfile())
+  val liked=listOf(Song("l1","A loved song","Loved Artist"))
+  val playlists=listOf(com.contentagent.vibestream.data.local.Playlist("mine",listOf(Song("p1","A playlist song","Playlist Artist"))))
+  var queue: List<Song> = emptyList()
+  compose.setContent {
+   VibeStreamTheme {
+    androidx.compose.material3.Surface(color = com.contentagent.vibestream.ui.theme.DarkBackground) {
+    androidx.compose.runtime.CompositionLocalProvider(com.contentagent.vibestream.ui.components.LocalSongActions provides {}) {
+    HomeShelves(YouTubeExtractor(),search={ q, _ ->
+     (1..6).map { Song("$q-r$it", "$q random $it", "Random $it") } +
+       Song("$q-l", "$q loved-flavoured", "Loved Artist") +
+       Song("$q-p", "$q playlist-flavoured", "Playlist Artist")
+    },related={emptyList()},currentSongId=null,onPlay={_,_->},onSeeAll={_,_->},
+     liked=liked,playlists=playlists,onPlayMood={ queue=it })
+    }
+    }
+   }
+  }
+  compose.waitForIdle()
+  compose.onNodeWithText("Your mood").performClick()
+  compose.waitForIdle()
+  compose.runOnIdle {
+   assertTrue(queue.isNotEmpty())
+   assertTrue("first pick is " + queue.first().artist, queue.first().artist=="Loved Artist" || queue.first().artist=="Playlist Artist")
+  }
+ }
+
  @Test fun homeShelfTitleOpensCategoryPage() {
   val ctx=ApplicationProvider.getApplicationContext<Context>()
   ctx.getSharedPreferences("vibestream_shelves",0).edit().clear().commit()
