@@ -234,6 +234,18 @@ fun HomeShelves(
     var cacheDialog by remember { mutableStateOf(false) }
     var diagnosticsDialog by remember { mutableStateOf(false) }
     var cacheEpoch by remember { mutableStateOf(0) }
+    var moodEpoch by remember { mutableStateOf(0) }
+    var moodDialog by remember { mutableStateOf(false) }
+    val motionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { moodEpoch++ }
+    val moodRank = remember(discoveryRound, moodEpoch, liked.size, recent.size) {
+        com.contentagent.vibestream.data.local.MoodRuntime.init(ctx)
+        com.contentagent.vibestream.data.local.MoodRuntime.ranker()
+    }
+    val moodInfo = remember(discoveryRound, moodEpoch, liked.size, recent.size) {
+        com.contentagent.vibestream.data.local.MoodRuntime.info()
+    }
     val known = playedKeys + (recent + liked + playlists.flatMap { it.songs }).flatMap { DiscoveryPolicy.keys(it) }
     val seedQueries = DiscoveryPolicy.queries(profile.languages, profile.moods, profile.artists, discoveryRound)
     val seedSongs = seedQueries.flatMap { ShelfCache.data[cacheKey(it, musicOnly)] ?: emptyList() }
@@ -244,7 +256,9 @@ fun HomeShelves(
     val discoveryPool = com.contentagent.vibestream.data.recommendation.SongSeedPolicy.blend(radioSongs, keywordPool, profile.languages)
     // "Your mood": the new-to-you pool ranked by taste first, so the mix leads
     // with artists he already loves instead of a flat shuffle of strangers.
-    val moodMix = DiscoveryPolicy.fresh(rankForTaste(discoveryPool, tasteArtists, skippedArtists), known, skippedArtists, musicOnly = musicOnly)
+    val tasteMix = DiscoveryPolicy.fresh(rankForTaste(discoveryPool, tasteArtists, skippedArtists), known, skippedArtists, musicOnly = musicOnly)
+    // Once ~30 plays are logged, the mood engine reorders the mix; before that this is the taste ranking above.
+    val moodMix = moodRank?.rank(tasteMix) ?: tasteMix
     // Show cached shelves instantly, then refresh one at a time in the background.
     LaunchedEffect(shelfList, musicOnly, discoveryRound, radioSeeds.map { it.id }, cacheEpoch) {
         refreshing = true
@@ -299,11 +313,35 @@ fun HomeShelves(
         val topShelf = ShelfCache.data[cacheKey(shelfList.first().second, musicOnly)].orEmpty()
         if (topShelf.isNotEmpty()) onSongsVisible(topShelf.take(6))
     }
+    if (moodDialog) {
+        androidx.compose.material3.AlertDialog(onDismissRequest = { moodDialog = false },
+            title = { Text("How does this feel right now?") },
+            text = { Column {
+                Text("Your pick is remembered for ${moodInfo.stateLabel} and steers the mix.", fontSize = 12.sp)
+                com.contentagent.vibestream.data.recommendation.Mood.values().forEach { m ->
+                    androidx.compose.material3.TextButton(onClick = {
+                        com.contentagent.vibestream.data.local.MoodRuntime.setMood(m)
+                        moodEpoch++; moodDialog = false
+                    }) { Text(m.label + if (m == moodInfo.mood) "  (current)" else "") }
+                }
+                if (!moodInfo.motionPermission) {
+                    androidx.compose.material3.TextButton(onClick = {
+                        motionLauncher.launch(android.Manifest.permission.ACTIVITY_RECOGNITION)
+                    }) { Text("Allow walking detection (optional)") }
+                }
+            } },
+            confirmButton = { androidx.compose.material3.TextButton(onClick = { moodDialog = false }) { Text("Close") } })
+    }
     if (diagnosticsDialog) {
         androidx.compose.material3.AlertDialog(onDismissRequest = { diagnosticsDialog = false },
             title = { Text("Home diagnostics", modifier = Modifier.testTag("home-diagnostics-title")) },
             text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Counts only. No song names or account details.")
+                Text("Counts and reasons. Nothing leaves this phone.")
+                Text("Mood engine | plays logged ${moodInfo.plays} of ${com.contentagent.vibestream.data.recommendation.MoodEngine.MIN_PLAYS} needed | mood ${moodInfo.mood?.label ?: "not yet"} | ${moodInfo.stateLabel} | walking detection ${if (moodInfo.motionPermission) "on" else "off"}", fontSize = 12.sp)
+                if (moodRank != null) {
+                    Text("Why the top picks:", fontSize = 12.sp)
+                    moodMix.take(5).forEach { s -> Text(s.title + "\n" + moodRank.explain(s), fontSize = 11.sp) }
+                }
                 Text("History keys ${playedKeys.size} | library songs ${(liked + playlists.flatMap { it.songs }).distinctBy { it.id }.size} | loading $refreshing")
                 shelfList.forEach { (title, query) ->
                     val pool = if (query == shelfList.first().second) discoveryPool else ShelfCache.data[cacheKey(query, musicOnly)].orEmpty()
@@ -411,6 +449,21 @@ fun HomeShelves(
                 androidx.compose.material3.TextButton(onClick = { diagnosticsDialog = true }) {
                     Text("Home diagnostics", color = TextSecondary, fontSize = 12.sp)
                 }
+            }
+        }
+        if (moodInfo.mood != null) {
+            item {
+                Text(
+                    text = if (moodInfo.notFeeling) "Not feeling this? Change mood (now ${moodInfo.mood.label})" else "Mood: ${moodInfo.mood.label}  ·  tap to change",
+                    color = TextSecondary, fontSize = 13.sp,
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                        .testTag("mood-chip")
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .clickable { moodDialog = true }
+                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                )
             }
         }
         if (namedMixes.isNotEmpty()) {

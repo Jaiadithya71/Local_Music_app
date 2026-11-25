@@ -50,6 +50,7 @@ class MainActivity : ComponentActivity() {
         extractor.authTokenProvider = { com.contentagent.vibestream.data.auth.YtMusicAuth.accessTokenOrRefresh() }
         extractor.onAuthRejected = { com.contentagent.vibestream.data.auth.YtMusicAuth.invalidateAccessToken() }
         offlineStorage = OfflineStorage(applicationContext)
+        com.contentagent.vibestream.data.local.MoodRuntime.init(applicationContext)
         library = LibraryStore(applicationContext)
         downloadManager = DownloadManager(applicationContext, extractor, offlineStorage)
         playerController = MusicPlayerController(
@@ -63,6 +64,7 @@ class MainActivity : ComponentActivity() {
         }
         playerController.likedSongsProvider = { library.liked.value }
         playerController.onEarlySkip = { library.recordSkip(it) }
+        playerController.isLikedProvider = { id -> library.liked.value.any { it.id == id } }
         library.onLikeChanged = { song, liked -> playerController.onLikeChanged(song, liked) }
 
         // Spotify-style media-notification actions (like / shuffle), handled app-side.

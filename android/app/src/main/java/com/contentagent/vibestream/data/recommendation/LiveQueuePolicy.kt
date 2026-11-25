@@ -11,7 +11,7 @@ object LiveQueuePolicy {
     fun update(
         queue: List<Song>, index: Int, candidates: List<Song>, feedback: Feedback,
         known: Set<String>, avoidedArtists: Set<String>, languages: List<String>, moods: List<String>,
-        limit: Int = 40
+        limit: Int = 40, ranker: ((List<Song>) -> List<Song>)? = null
     ): List<Song> {
         if (index !in queue.indices) return queue
         val fixed = queue.take(index + 1)
@@ -25,13 +25,15 @@ object LiveQueuePolicy {
             // tail this session. Saved playlists never pass through this policy.
             feedback.signal != Signal.SKIP || artist.isBlank() || artist == "unknown artist" || it.artist.trim().lowercase(Locale.ROOT) != artist
         }
-        val ranked = all.sortedWith(compareBy<Song>(
+        val ranked0 = all.sortedWith(compareBy<Song>(
             { if (it.artist.trim().lowercase(Locale.ROOT) in avoided) 1 else 0 },
             { if (feedback.signal == Signal.LIKE && it.artist.trim().lowercase(Locale.ROOT) == artist) 0 else 1 },
             { if (feedback.signal == Signal.LIKE && additions.any { a -> a.id == it.id }) 0 else 1 },
             { SongSeedPolicy.languageRank(it, languages) },
             { song -> if (moods.any { mood -> (song.title + " " + song.artist).contains(mood, ignoreCase = true) }) 0 else 1 }
         ))
+        // Mood engine reorders the tail once enough plays are logged; null means unchanged.
+        val ranked = ranker?.invoke(ranked0) ?: ranked0
         return fixed + ranked.take(limit)
     }
 }

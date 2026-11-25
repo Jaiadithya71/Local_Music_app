@@ -28,9 +28,10 @@ internal class LiveQueueSession {
     }
     fun revise(
         requestEpoch: Long, queue: List<Song>, index: Int, candidates: List<Song>, feedback: LiveQueuePolicy.Feedback,
-        known: Set<String>, languages: List<String>, moods: List<String>
+        known: Set<String>, languages: List<String>, moods: List<String>,
+        ranker: ((List<Song>) -> List<Song>)? = null
     ): List<Song> {
         if (!active || requestEpoch != epoch) return queue
-        return LiveQueuePolicy.update(queue,index,candidates,feedback,known+played,avoidedArtists,languages,moods)
+        return LiveQueuePolicy.update(queue,index,candidates,feedback,known+played,avoidedArtists,languages,moods,ranker = ranker)
     }
 }

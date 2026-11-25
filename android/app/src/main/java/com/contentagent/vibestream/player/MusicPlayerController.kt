@@ -105,6 +105,17 @@ class MusicPlayerController(
     var knownSongsProvider: () -> Set<String> = { emptySet() }
     var likedSongsProvider: () -> List<Song> = { emptyList() }
     var onEarlySkip: ((Song) -> Unit)? = null
+    var isLikedProvider: (String) -> Boolean = { false }
+
+    // One play event per play, logged on the device for the mood engine.
+    private val playTracker = com.contentagent.vibestream.data.local.MoodRuntime.newTracker { id -> isLikedProvider(id) }
+    private fun trackPlayStart(song: Song, auto: Boolean) {
+        try {
+            playTracker.begin(song, _currentPosition.value, _duration.value, auto,
+                if (liveQueue.active) "home_mix" else "queue", System.currentTimeMillis())
+            com.contentagent.vibestream.data.local.MoodRuntime.onSongStart()
+        } catch (e: Exception) { }
+    }
     private val _liveQueueStatus = MutableStateFlow("")
     val liveQueueStatus: StateFlow<String> = _liveQueueStatus.asStateFlow()
 
@@ -134,7 +145,8 @@ class MusicPlayerController(
             val revised = liveQueue.revise(
                 epoch, before, index, candidates,
                 com.contentagent.vibestream.data.recommendation.LiveQueuePolicy.Feedback(song, signal),
-                knownSongsProvider(), taste.languages, taste.moods
+                knownSongsProvider(), taste.languages, taste.moods,
+                com.contentagent.vibestream.data.local.MoodRuntime.rankFn()
             )
             if (revised != before) {
                 _queue.value = revised
@@ -490,6 +502,7 @@ class MusicPlayerController(
                     _queueIndex.value = idx
                     _currentSong.value = q[idx]
                     if (old != idx) liveQueue.notePlaying(q[idx])
+                    if (old != idx && reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) trackPlayStart(q[idx], true)
                     if (old != idx) {
                         recoveryAttempts = 0
                         alternateHops = 0
@@ -845,6 +858,7 @@ class MusicPlayerController(
         prefetchJob?.cancel()
         playbackJob?.cancel()
         plannedShuffleNext = -1
+        trackPlayStart(song, false)
         // A tap is visible immediately, before network extraction completes.
         controller?.pause()
         _currentSong.value = song
