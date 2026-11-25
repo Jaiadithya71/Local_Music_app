@@ -62,9 +62,12 @@ fun ShelfScreen(
     val loadingMore = ShelfCache.loadingMore[k] == true
     val depleted = ShelfCache.depleted[k] == true
 
-    // Debounce typing, then load the scoped list (full category list when blank).
+    // Load the scoped list (full category list when blank). The first load is
+    // immediate; only later query edits are debounced.
+    var typedOnce by remember { mutableStateOf(false) }
     LaunchedEffect(effectiveQuery, musicOnly) {
-        delay(350)
+        if (typedOnce) delay(350)
+        typedOnce = true
         if (ShelfCache.data[k].isNullOrEmpty()) {
             loadShelf(ctx, search, effectiveQuery, musicOnly, force = true)
         }
