@@ -45,6 +45,9 @@ class ShelfPageTest {
   compose.onNodeWithText("workout songs track 1").assertExists()
   // In-category search: "tamil" on the Workout page searches "tamil workout songs".
   compose.onNodeWithTag("shelf-search").performTextInput("tamil")
+  compose.waitForIdle()
+  // Recomposition started the debounced reload; now run the paused main
+  // looper past the 350ms debounce so the search actually fires.
   org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(600, java.util.concurrent.TimeUnit.MILLISECONDS)
   compose.waitForIdle()
   compose.runOnIdle { assertTrue(queries.any { it=="tamil workout songs" }) }
