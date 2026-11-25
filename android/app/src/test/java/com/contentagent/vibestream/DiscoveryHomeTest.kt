@@ -121,6 +121,32 @@ class DiscoveryHomeTest {
         }
     }
 
+    @Test fun staleIneligiblePoolIsDroppedAndRefetched() {
+        val ctx = ApplicationProvider.getApplicationContext<Context>()
+        ctx.getSharedPreferences("vibestream_shelves", 0).edit().clear().commit()
+        com.contentagent.vibestream.ui.screens.clearShelfMemory()
+        ctx.getSharedPreferences("vibestream_radio_v1", 0).edit().clear().commit()
+        TasteStore(ctx).save(TasteProfile(listOf("Tamil")))
+        // A pool an older build could cache: only long compilation uploads, which
+        // the current discovery policy can never show.
+        val stale = (1..8).map { Song("stale$it", "Non stop jukebox $it", "DJ $it", durationSec = 3600, kind = "video") }
+        val key = "discovery-v4|M|Tamil new releases"
+        ctx.getSharedPreferences("vibestream_shelves", 0).edit()
+            .putString(key, com.google.gson.Gson().toJson(stale)).putLong("t:$key", System.currentTimeMillis()).commit()
+        val freshPool = (1..8).map { Song("fresh$it", "Fresh song $it", "Artist $it") }
+        var fetched = false
+        compose.setContent {
+            VibeStreamTheme {
+                HomeShelves(YouTubeExtractor(), search = { q, _ -> if (q == "Tamil new releases") fetched = true; freshPool },
+                    related = { emptyList() }, currentSongId = null, onPlay = { _, _ -> }, onSeeAll = {})
+            }
+        }
+        compose.waitForIdle()
+        compose.runOnIdle { assertTrue(fetched) }
+        compose.onNodeWithTag("home-shelves").performScrollToNode(hasText("Fresh song 1"))
+        compose.onNodeWithText("Fresh song 1").assertIsDisplayed()
+    }
+
     @Test fun warmHomeUsesSavedPoolsAndClearPreservesLibrary() {
         val ctx = ApplicationProvider.getApplicationContext<Context>()
         ctx.getSharedPreferences("vibestream_shelves", 0).edit().clear().commit()

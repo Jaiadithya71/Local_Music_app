@@ -86,7 +86,16 @@ private fun restoreShelves(ctx: android.content.Context, queries: List<String>, 
         if (ShelfCache.data[k] != null) continue
         val json = shelfPrefs(ctx).getString(k, null) ?: continue
         val list: List<Song>? = try { gson.fromJson(json, type) } catch (e: Exception) { null }
-        if (!list.isNullOrEmpty()) ShelfCache.data[k] = list
+        if (list.isNullOrEmpty()) continue
+        // Pools saved by older builds can hold only recordings the current policy
+        // rejects (e.g. unvetted uploads from before they were allowed on Home).
+        // Restoring them dead-ends the shelf on "No eligible songs" until the
+        // 6-hour refresh; drop them so the shelf refetches instead.
+        if (DiscoveryPolicy.fresh(list, emptySet(), limit = 1, musicOnly = musicOnly).isEmpty()) {
+            shelfPrefs(ctx).edit().remove(k).remove("t:$k").apply()
+            continue
+        }
+        ShelfCache.data[k] = list
     }
 }
 
