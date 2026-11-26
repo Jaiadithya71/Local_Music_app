@@ -32,10 +32,10 @@ class ChapterPolicyTest {
 
     @Test fun nextAndPreviousJumpBetweenSongs() {
         val c = listOf(Chapter("A", 0), Chapter("B", 200), Chapter("C", 400))
-        assertEquals(200_000L, ChapterPolicy.nextStartMs(c, 10_000L))
+        assertTrue(ChapterPolicy.nextStartMs(c, 10_000L) == 200_000L)
         assertNull(ChapterPolicy.nextStartMs(c, 401_000L))
-        assertEquals(200_000L, ChapterPolicy.prevStartMs(c, 250_000L))
-        assertEquals(0L, ChapterPolicy.prevStartMs(c, 201_000L))
+        assertTrue(ChapterPolicy.prevStartMs(c, 250_000L) == 200_000L)
+        assertTrue(ChapterPolicy.prevStartMs(c, 201_000L) == 0L)
         assertNull(ChapterPolicy.prevStartMs(c, 1_000L))
     }
 }
