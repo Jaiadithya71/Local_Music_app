@@ -109,6 +109,32 @@ class MusicPlayerController(
 
     // One play event per play, logged on the device for the mood engine.
     private val playTracker = com.contentagent.vibestream.data.local.MoodRuntime.newTracker { id -> isLikedProvider(id) }
+    // Long recordings: song names and jump points from chapters or description timestamps.
+    private val _chapters = MutableStateFlow<List<com.contentagent.vibestream.data.recommendation.Chapter>>(emptyList())
+    val chapters: StateFlow<List<com.contentagent.vibestream.data.recommendation.Chapter>> = _chapters.asStateFlow()
+    private var chaptersFor: String? = null
+    fun ensureChapters(song: Song) {
+        if (chaptersFor == song.id) return
+        chaptersFor = song.id
+        _chapters.value = emptyList()
+        if (song.durationSec < 1200L) return
+        kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
+            val c = try { extractor.chapters(song.id) } catch (t: Throwable) { emptyList() }
+            if (chaptersFor == song.id) _chapters.value = c
+        }
+    }
+
+    /** Next/Previous inside a long recording. True when handled. */
+    fun chapterNav(forward: Boolean): Boolean {
+        val cs = _chapters.value
+        if (cs.size < 2) return false
+        val pos = controller?.currentPosition ?: _currentPosition.value
+        val target = (if (forward) com.contentagent.vibestream.data.recommendation.ChapterPolicy.nextStartMs(cs, pos)
+            else com.contentagent.vibestream.data.recommendation.ChapterPolicy.prevStartMs(cs, pos)) ?: return false
+        seekTo(target)
+        return true
+    }
+
     private fun trackPlayStart(song: Song, auto: Boolean) {
         try {
             playTracker.begin(song, _currentPosition.value, _duration.value, auto,
