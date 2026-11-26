@@ -812,7 +812,7 @@ class YouTubeExtractor {
                 .map { com.contentagent.vibestream.data.recommendation.Chapter(it.title.orEmpty().trim().take(80), it.startTimeSeconds.toLong()) }
                 .filter { it.title.isNotEmpty() }
             val result = if (fromSegments.size >= 3) fromSegments
-            else com.contentagent.vibestream.data.recommendation.ChapterPolicy.fromDescription(info.description?.content.orEmpty(), info.length)
+            else com.contentagent.vibestream.data.recommendation.ChapterPolicy.fromDescription(info.description?.content.orEmpty(), info.duration)
             chapterCache[videoId] = result
             result
         } catch (e: kotlinx.coroutines.CancellationException) {

@@ -137,6 +137,7 @@ class MusicPlayerController(
 
     private fun trackPlayStart(song: Song, auto: Boolean) {
         try {
+            ensureChapters(song)
             playTracker.begin(song, _currentPosition.value, _duration.value, auto,
                 if (liveQueue.active) "home_mix" else "queue", System.currentTimeMillis())
             com.contentagent.vibestream.data.local.MoodRuntime.onSongStart()
@@ -428,6 +429,7 @@ class MusicPlayerController(
     }
 
     fun next(userInitiated: Boolean = true) {
+        if (userInitiated && chapterNav(true)) return
         if (userInitiated) onUserNext(controller?.currentPosition ?: _currentPosition.value)
         val q = _queue.value
         if (q.isEmpty()) return
@@ -449,6 +451,7 @@ class MusicPlayerController(
     }
 
     fun previous() {
+        if (chapterNav(false)) return
         val q = _queue.value
         if (q.isEmpty()) return
         if ((controller?.currentPosition ?: 0L) > 3000L) { seekTo(0); return }
@@ -653,6 +656,7 @@ class MusicPlayerController(
                 context.getSharedPreferences("vibestream_player", Context.MODE_PRIVATE)
                     .edit().remove("app_volume").apply()
                 refreshDeviceVolume()
+                PlaybackService.chapterNav = { fwd -> chapterNav(fwd) }
                 PlaybackService.nextHandler = { next() }
                 PlaybackService.skipFeedbackHandler = { position -> onUserNext(position) }
                 PlaybackService.previousHandler = { previous() }
