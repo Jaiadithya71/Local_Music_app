@@ -109,8 +109,35 @@ class MusicPlayerController(
 
     // One play event per play, logged on the device for the mood engine.
     private val playTracker = com.contentagent.vibestream.data.local.MoodRuntime.newTracker { id -> isLikedProvider(id) }
+    // Long recordings: song names and jump points from chapters or description timestamps.
+    private val _chapters = MutableStateFlow<List<com.contentagent.vibestream.data.recommendation.Chapter>>(emptyList())
+    val chapters: StateFlow<List<com.contentagent.vibestream.data.recommendation.Chapter>> = _chapters.asStateFlow()
+    private var chaptersFor: String? = null
+    private fun loadChapters(song: Song) {
+        if (chaptersFor == song.id) return
+        chaptersFor = song.id
+        _chapters.value = emptyList()
+        if (song.durationSec < 1200L) return
+        kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
+            val c = try { extractor.chapters(song.id) } catch (t: Throwable) { emptyList() }
+            if (chaptersFor == song.id) _chapters.value = c
+        }
+    }
+
+    /** Next/Previous inside a long recording. True when handled. */
+    fun chapterNav(forward: Boolean): Boolean {
+        val cs = _chapters.value
+        if (cs.size < 2) return false
+        val pos = controller?.currentPosition ?: _currentPosition.value
+        val target = (if (forward) com.contentagent.vibestream.data.recommendation.ChapterPolicy.nextStartMs(cs, pos)
+            else com.contentagent.vibestream.data.recommendation.ChapterPolicy.prevStartMs(cs, pos)) ?: return false
+        seekTo(target)
+        return true
+    }
+
     private fun trackPlayStart(song: Song, auto: Boolean) {
         try {
+            loadChapters(song)
             playTracker.begin(song, _currentPosition.value, _duration.value, auto,
                 if (liveQueue.active) "home_mix" else "queue", System.currentTimeMillis())
             com.contentagent.vibestream.data.local.MoodRuntime.onSongStart()
@@ -402,6 +429,7 @@ class MusicPlayerController(
     }
 
     fun next(userInitiated: Boolean = true) {
+        if (userInitiated && chapterNav(true)) return
         if (userInitiated) onUserNext(controller?.currentPosition ?: _currentPosition.value)
         val q = _queue.value
         if (q.isEmpty()) return
@@ -423,6 +451,7 @@ class MusicPlayerController(
     }
 
     fun previous() {
+        if (chapterNav(false)) return
         val q = _queue.value
         if (q.isEmpty()) return
         if ((controller?.currentPosition ?: 0L) > 3000L) { seekTo(0); return }
@@ -627,6 +656,7 @@ class MusicPlayerController(
                 context.getSharedPreferences("vibestream_player", Context.MODE_PRIVATE)
                     .edit().remove("app_volume").apply()
                 refreshDeviceVolume()
+                PlaybackService.chapterNav = { fwd -> chapterNav(fwd) }
                 PlaybackService.nextHandler = { next() }
                 PlaybackService.skipFeedbackHandler = { position -> onUserNext(position) }
                 PlaybackService.previousHandler = { previous() }
