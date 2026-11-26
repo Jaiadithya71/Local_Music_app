@@ -43,7 +43,7 @@ jobs:
           set +e
           ./gradlew --no-daemon testDebugUnitTest --tests '*LiveQueueTest' --tests '*SleepTimerTest' --tests '*ShelfRefreshTest' --tests '*ShelfPageTest' --tests '*GoogleDeviceAuthTest' --tests '*SongSeedPolicyTest' --tests '*RelatedSongCacheTest' --tests '*MusicSearchPolicyTest' --tests '*DiscoveryPolicyTest' --tests '*DiscoveryHomeTest' --tests '*QueueReconnectTest' --tests '*PersistenceTest' --tests '*MixBuilderTest' --tests '*PlaybackCacheTest' --tests '*DeviceVolumeTest' --tests '*SlowRadioHomeTest' --tests '*BackupImportSeedsTest' --tests '*PlaylistDownloadTest' --tests '*TrackDownloadQueueTest' --tests '*StreamUrlStoreTest' --tests '*MoodEngineTest' --tests '*ChapterPolicyTest' > /tmp/t.log 2>&1
           rc=$?
-          grep -E "^e: |FAILED|Error|Exception" /tmp/t.log | head -30 | while read -r l; do echo "::error::$l"; done
+          grep -vE "^\s*$|^> Task .* (UP-TO-DATE|NO-SOURCE)|^w: " /tmp/t.log | tail -40 | while read -r l; do echo "::error::$l"; done
           exit $rc
       # UI rendering runs in its own Gradle invocation: sharing one JVM let a
       # leaked coroutine from the ActivityScenario tests fail SlowRadioHomeTest
