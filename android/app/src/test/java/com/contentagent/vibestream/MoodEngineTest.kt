@@ -34,9 +34,24 @@ class MoodEngineTest {
 
     @Test fun belowThirtyPlaysNothingChanges() {
         val few = nightLog().take(10)
-        val list = listOf(song("a", "workout dance"), song("b", "slow melody"))
+        val list = listOf(song("a", "hello one"), song("b", "world two"))
         assertEquals(list, MoodRanker(few, now, night, null).rank(list))
         assertNull(MoodEngine.currentMood(few, now, night, emptyMap()))
+    }
+
+    @Test fun afterIdleGapCalmSongsLeadEvenWithFewPlays() {
+        val few = nightLog().take(10)
+        val list = listOf(song("a", "workout dance"), song("b", "slow melody"))
+        assertEquals("b", MoodRanker(few, now, night, null).rank(list).first().id)
+    }
+
+    @Test fun glideFadesOnceTheSessionIsGoing() {
+        val session = (0 until 7).map { i ->
+            PlayEvent(songId = "s$i", artist = "A$i", title = "x$i", startMs = now - (8L - i) * 200_000L,
+                listenedSec = 150, durationSec = 200, outcome = MoodEngine.FINISHED, hour = 23, route = "wired", motion = "still")
+        }
+        val list = listOf(song("a", "workout dance"), song("b", "slow melody"))
+        assertEquals(list, MoodRanker(session, now, night, null).rank(list))
     }
 
     @Test fun learnedStatePutsSlowSongsFirstAndWorkoutLast() {

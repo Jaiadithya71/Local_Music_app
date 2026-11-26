@@ -58,6 +58,9 @@ object MoodEngine {
     const val REPLAYED = "replayed"
     const val MIN_PLAYS = 30
     const val HALF_LIFE_DAYS = 21.0
+    const val GLIDE_GAP_MS = 20 * 60_000L
+    const val GLIDE_SONGS = 6
+    val CALM_TAGS: Set<String> = setOf("chill", "lofi", "slow", "melody", "melodies", "acoustic", "soft", "relax", "relaxing", "calm", "soothing", "unplugged", "sleep", "instrumental", "piano", "ambient", "flute", "veena")
 
     val MOOD_TAGS: Map<Mood, Set<String>> = mapOf(
         Mood.CHILL to setOf("chill", "lofi", "slow", "melody", "melodies", "acoustic", "soft", "relax", "relaxing", "calm", "soothing", "unplugged", "love", "romantic", "night", "sleep"),
@@ -167,6 +170,25 @@ class MoodRanker(
         .filter { it.outcome == MoodEngine.SKIP_EARLY && now - it.startMs < 2 * 3_600_000L }
         .map { MoodEngine.norm(it.artist) }.filter { it.isNotEmpty() }.toSet()
     private val avoid: Set<String> = lane()
+
+    /**
+     * Glide: when listening starts after an idle gap (20+ minutes with no play), the first
+     * picks lean calm and the lean fades over the next five songs. 0 once the session is going.
+     */
+    private val glide: Double = run {
+        var n = 0
+        var edge = now
+        for (e in sorted.asReversed()) {
+            val end = e.startMs + e.listenedSec * 1000L
+            if (edge - end > GLIDE_GAP_MS) break
+            n++
+            edge = e.startMs
+        }
+        if (n >= GLIDE_SONGS) 0.0 else 0.6 * (1.0 - n.toDouble() / GLIDE_SONGS)
+    }
+
+    private fun calmBonus(s: Song): Double =
+        if (glide > 0.0 && MoodEngine.tagsOf(s.title, s.artist).any { it in MoodEngine.CALM_TAGS }) glide else 0.0
     private val moodTags: Set<String> = mood?.let { MoodEngine.MOOD_TAGS.getValue(it) } ?: emptySet()
 
     /** After 2 early skips in a row, drop that lane (shared tags or artists) for the next picks. */
@@ -221,6 +243,7 @@ class MoodRanker(
             (if (p.boredom > 0) "boredom -${f(p.boredom)} | " else "") +
             (if (p.skipPenalty > 0) "recent skip -${f(p.skipPenalty)} | " else "") +
             (if (p.laneDrop > 0) "lane dropped | " else "") +
+            (if (calmBonus(s) > 0) "calm glide | " else "") +
             "score ${f(p.score)}"
     }
 
@@ -232,13 +255,17 @@ class MoodRanker(
     }
 
     fun rank(list: List<Song>): List<Song> {
-        if (list.size < 2 || model.count < MoodEngine.MIN_PLAYS) return list
+        if (list.size < 2) return list
+        if (model.count < MoodEngine.MIN_PLAYS) {
+            // Too few plays to learn from: only the idle-gap glide applies (stable sort keeps the old order otherwise).
+            return if (glide > 0.0) list.sortedByDescending { calmBonus(it) } else list
+        }
         val w = model.count.toDouble() / (model.count + 50.0)
         val n = list.size
         class Item(val song: Song, val parts: Parts, val blended: Double)
         val items = list.mapIndexed { i, s ->
             val p = parts(s)
-            Item(s, p, w * p.score + (1.0 - w) * (1.0 - i.toDouble() / n))
+            Item(s, p, w * p.score + (1.0 - w) * (1.0 - i.toDouble() / n) + calmBonus(s))
         }
         val byScore = items.sortedByDescending { it.blended }
         // Songs played in the last 50 go to the back, not out: a thin pool still fills.
