@@ -800,28 +800,6 @@ class YouTubeExtractor {
         }
     }
 
-    private val chapterCache = java.util.Collections.synchronizedMap(HashMap<String, List<com.contentagent.vibestream.data.recommendation.Chapter>>())
-
-    /** Song boundaries inside a long recording: YouTube chapters, else timestamp lines in the description. */
-    suspend fun chapters(videoId: String): List<com.contentagent.vibestream.data.recommendation.Chapter> = withContext(Dispatchers.IO) {
-        chapterCache[videoId]?.let { return@withContext it }
-        try {
-            NewPipeBootstrap.ensureInit(client)
-            val info = org.schabi.newpipe.extractor.stream.StreamInfo.getInfo("https://www.youtube.com/watch?v=$videoId")
-            val fromSegments = info.streamSegments
-                .map { com.contentagent.vibestream.data.recommendation.Chapter(it.title.orEmpty().trim().take(80), it.startTimeSeconds.toLong()) }
-                .filter { it.title.isNotEmpty() }
-            val result = if (fromSegments.size >= 3) fromSegments
-            else com.contentagent.vibestream.data.recommendation.ChapterPolicy.fromDescription(info.description?.content.orEmpty(), info.length)
-            chapterCache[videoId] = result
-            result
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (e: Throwable) {
-            emptyList()
-        }
-    }
-
     @Volatile var lastResolveError: String? = null
 
     /**
