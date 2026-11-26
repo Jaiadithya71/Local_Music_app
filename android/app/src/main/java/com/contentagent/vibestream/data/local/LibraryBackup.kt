@@ -52,4 +52,21 @@ class LibraryBackup(private val context: Context, private val library: LibrarySt
             true
         } catch (e: Exception) { false }
     }
+
+    /** One-time import of the playlist shipped inside the app (his Amazon Music "Good Songs"). */
+    suspend fun importBundledOnce(asset: String, flag: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val prefs = context.getSharedPreferences("bundled_imports", Context.MODE_PRIVATE)
+            if (prefs.getBoolean(flag, false)) return@withContext false
+            val text = context.assets.open(asset).use { String(it.readBytes(), Charsets.UTF_8) }
+            val data = gson.fromJson(text, Backup::class.java) ?: return@withContext false
+            library.mergeBackup(
+                data.liked ?: emptyList(),
+                data.recent ?: emptyList(),
+                data.playlists ?: emptyList()
+            )
+            prefs.edit().putBoolean(flag, true).apply()
+            true
+        } catch (e: Exception) { false }
+    }
 }

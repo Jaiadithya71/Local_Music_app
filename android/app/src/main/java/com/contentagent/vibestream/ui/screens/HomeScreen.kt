@@ -209,6 +209,7 @@ fun HomeScreen(
 
     // Library backup (export/import via the system file picker)
     val backup = remember { LibraryBackup(appCtx, library) }
+    LaunchedEffect(Unit) { backup.importBundledOnce("good_songs.json", "good_songs_v1") }
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
     ) { uri ->
