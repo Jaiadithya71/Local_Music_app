@@ -26,7 +26,8 @@ fun SongOptionsButton(song: Song, onRemove: (() -> Unit)? = null) {
 fun SongActionsSheet(
     song: Song, isLiked: Boolean, isDownloaded: Boolean, isDownloading: Boolean,
     onLike: () -> Unit, onSave: () -> Unit, onDownload: () -> Unit,
-    onRemove: (() -> Unit)? = null, onDismiss: () -> Unit
+    onRemove: (() -> Unit)? = null, onDismiss: () -> Unit,
+    onNotForMe: (() -> Unit)? = null
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = DarkSurfaceElevated) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 24.dp)) {
@@ -41,6 +42,9 @@ fun SongActionsSheet(
             }
             TextButton(onClick = onDownload, enabled = !isDownloaded && !isDownloading, modifier = Modifier.fillMaxWidth()) {
                 Text(if (isDownloaded) "Downloaded" else if (isDownloading) "Downloading" else "Download song", color = TextSecondary)
+            }
+            onNotForMe?.let { nf ->
+                TextButton(onClick = nf, modifier = Modifier.fillMaxWidth()) { Text("Not for me (stop suggesting)", color = TextSecondary) }
             }
             onRemove?.let { remove ->
                 TextButton(onClick = remove, modifier = Modifier.fillMaxWidth()) { Text("Remove from playlist", color = MaterialTheme.colorScheme.error) }

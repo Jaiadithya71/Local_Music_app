@@ -905,7 +905,9 @@ fun HomeScreen(
             onSave = { addToPlaylistSong = s; songActions = null },
             onDownload = { downloadManager.enqueueTracks(listOf(s)); songActions = null },
             onRemove = request.onRemove?.let { remove -> { songActions = null; remove() } },
-            onDismiss = { songActions = null }
+            onDismiss = { songActions = null },
+            onNotForMe = { library.notForMe(s); songActions = null
+                android.widget.Toast.makeText(appCtx, "Won't suggest this again", android.widget.Toast.LENGTH_SHORT).show() }
         )
     }
 

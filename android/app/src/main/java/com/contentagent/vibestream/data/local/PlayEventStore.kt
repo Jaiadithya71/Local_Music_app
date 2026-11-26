@@ -35,6 +35,16 @@ class PlayEventStore(context: Context) {
         prefs.edit().putString("events", gson.toJson(list)).apply()
     }
 
+    /** Backup restore: add events not already logged (same song, same start time). */
+    @Synchronized fun merge(incoming: List<PlayEvent>) {
+        val list = loaded()
+        val have = list.map { it.songId + "@" + it.startMs }.toHashSet()
+        incoming.filter { (it.songId + "@" + it.startMs) !in have }.forEach { list.add(it) }
+        list.sortBy { it.startMs }
+        while (list.size > 3000) list.removeAt(0)
+        prefs.edit().putString("events", gson.toJson(list)).apply()
+    }
+
     @Synchronized fun overrides(): Map<String, String> {
         val json = prefs.getString("overrides", null) ?: return emptyMap()
         return try {

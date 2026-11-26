@@ -18,7 +18,8 @@ class LibraryBackup(private val context: Context, private val library: LibrarySt
         val version: Int = 1,
         val liked: List<Song>? = null,
         val recent: List<Song>? = null,
-        val playlists: List<Playlist>? = null
+        val playlists: List<Playlist>? = null,
+        val playEvents: List<com.contentagent.vibestream.data.recommendation.PlayEvent>? = null
     )
 
     suspend fun exportTo(uri: Uri): Boolean = withContext(Dispatchers.IO) {
@@ -26,7 +27,8 @@ class LibraryBackup(private val context: Context, private val library: LibrarySt
             val data = Backup(
                 liked = library.liked.value,
                 recent = library.recent.value,
-                playlists = library.playlists.value
+                playlists = library.playlists.value,
+                playEvents = MoodRuntime.store()?.all()
             )
             val out = context.contentResolver.openOutputStream(uri, "wt")
                 ?: return@withContext false
@@ -46,6 +48,7 @@ class LibraryBackup(private val context: Context, private val library: LibrarySt
                 data.recent ?: emptyList(),
                 data.playlists ?: emptyList()
             )
+            data.playEvents?.let { MoodRuntime.store()?.merge(it) }
             true
         } catch (e: Exception) { false }
     }

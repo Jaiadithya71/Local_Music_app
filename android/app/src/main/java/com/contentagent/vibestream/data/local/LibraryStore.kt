@@ -75,6 +75,22 @@ class LibraryStore(context: Context) {
         prefs.edit().putString("artist_skips", gson.toJson(map)).apply()
     }
 
+    /** "Not for me": never suggest this song again and treat its artist as skipped. */
+    fun notForMe(song: Song) {
+        recordPlayed(song)
+        val a = song.artist
+        if (a.isNotBlank() && a != "Unknown Artist") {
+            val map = _artistSkips.value + (a to maxOf(2, (_artistSkips.value[a] ?: 0) + 2))
+            _artistSkips.value = map
+            prefs.edit().putString("artist_skips", gson.toJson(map)).apply()
+        }
+        MoodRuntime.store()?.append(com.contentagent.vibestream.data.recommendation.PlayEvent(
+            songId = song.id, artist = song.artist, title = song.title, startMs = System.currentTimeMillis(),
+            listenedSec = 0, durationSec = song.durationSec.toInt(),
+            outcome = com.contentagent.vibestream.data.recommendation.MoodEngine.SKIP_EARLY, source = "not_for_me"
+        ))
+    }
+
     private inline fun <reified T> load(key: String): List<T> {
         val json = prefs.getString(key, null) ?: return emptyList()
         return try {

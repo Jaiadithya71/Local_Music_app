@@ -20,10 +20,15 @@ object DiscoveryPolicy {
 
     fun fresh(candidates: List<Song>, known: Set<String>, skippedArtists: Set<String> = emptySet(), limit: Int = 50, musicOnly: Boolean = true): List<Song> {
         val seen = known.toMutableSet()
-        val unique = candidates.filter { song ->
+        val candidatesUnique = candidates.filter { song ->
             (!musicOnly || MusicSearchPolicy.discoveryTracks(listOf(song)).isNotEmpty()) &&
                 keys(song).none { it in seen } && keys(song).also { seen.addAll(it) }.isNotEmpty()
-        }.sortedBy { if (it.artist.trim().lowercase(Locale.ROOT) in skippedArtists.map { a -> a.trim().lowercase(Locale.ROOT) }) 1 else 0 }
+        }
+        // Artists he skipped repeatedly are dropped, not just moved down, as long as
+        // enough other songs remain to fill the list.
+        val skipSet = skippedArtists.map { a -> a.trim().lowercase(Locale.ROOT) }.toSet()
+        val (bad, good) = candidatesUnique.partition { it.artist.trim().lowercase(Locale.ROOT) in skipSet }
+        val unique = if (good.size >= minOf(limit, 12)) good else good + bad
         val pending = unique.toMutableList()
         val out = mutableListOf<Song>()
         while (pending.isNotEmpty() && out.size < limit.coerceAtLeast(0)) {
