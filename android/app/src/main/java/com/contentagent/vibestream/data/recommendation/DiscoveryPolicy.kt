@@ -21,8 +21,7 @@ object DiscoveryPolicy {
     fun fresh(candidates: List<Song>, known: Set<String>, skippedArtists: Set<String> = emptySet(), limit: Int = 50, musicOnly: Boolean = true): List<Song> {
         val seen = known.toMutableSet()
         val candidatesUnique = candidates.filter { song ->
-            !NonSongPolicy.isNonSong(song) &&
-                (!musicOnly || MusicSearchPolicy.discoveryTracks(listOf(song)).isNotEmpty()) &&
+            (!musicOnly || (!NonSongPolicy.isNonSong(song) && MusicSearchPolicy.discoveryTracks(listOf(song)).isNotEmpty())) &&
                 keys(song).none { it in seen } && keys(song).also { seen.addAll(it) }.isNotEmpty()
         }
         // Artists he skipped repeatedly are dropped, not just moved down, as long as

@@ -25,7 +25,7 @@ class NonSongPolicyTest {
     @Test fun freshDropsNonSongs() {
         val out = DiscoveryPolicy.fresh(
             listOf(song("1", "Movie Trailer", 200), song("4", "Real Song", 200)),
-            emptySet(), musicOnly = false
+            emptySet(), musicOnly = true
         )
         assertEquals(listOf("4"), out.map { it.id })
     }
