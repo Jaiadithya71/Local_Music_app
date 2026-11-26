@@ -29,6 +29,7 @@ class PlaybackService : MediaSessionService() {
     companion object {
         // Set by MusicPlayerController: notification / lock-screen skip taps land
         // here when the ExoPlayer playlist itself has no adjacent item to seek to.
+        var chapterNav: ((Boolean) -> Boolean)? = null
         var nextHandler: (() -> Unit)? = null
         var skipFeedbackHandler: ((Long) -> Unit)? = null
         var previousHandler: (() -> Unit)? = null
@@ -196,17 +197,21 @@ class PlaybackService : MediaSessionService() {
                     .build()
             }
             override fun seekToNext() {
+                if (chapterNav?.invoke(true) == true) return
                 skipFeedbackHandler?.invoke(exo.currentPosition)
                 if (exo.hasNextMediaItem()) super.seekToNextMediaItem() else nextHandler?.invoke()
             }
             override fun seekToNextMediaItem() {
+                if (chapterNav?.invoke(true) == true) return
                 skipFeedbackHandler?.invoke(exo.currentPosition)
                 if (exo.hasNextMediaItem()) super.seekToNextMediaItem() else nextHandler?.invoke()
             }
             override fun seekToPrevious() {
+                if (chapterNav?.invoke(false) == true) return
                 if (exo.currentMediaItemIndex > 0) super.seekToPreviousMediaItem() else previousHandler?.invoke()
             }
             override fun seekToPreviousMediaItem() {
+                if (chapterNav?.invoke(false) == true) return
                 if (exo.currentMediaItemIndex > 0) super.seekToPreviousMediaItem() else previousHandler?.invoke()
             }
         }
