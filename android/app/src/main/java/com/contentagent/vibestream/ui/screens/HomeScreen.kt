@@ -843,7 +843,6 @@ fun HomeScreen(
             downloadProgress = progress,
             onTogglePlayPause = { playerController.togglePlayPause() },
             onSeekTo = { playerController.seekTo(it) },
-            chapters = playerController.chapters.collectAsState().value,
             onSkipForward = { playerController.skipForward(10) },
             onSkipBackward = { playerController.skipBackward(10) },
             onDownloadClick = {

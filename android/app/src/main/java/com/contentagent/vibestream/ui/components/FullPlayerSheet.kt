@@ -58,7 +58,6 @@ fun FullPlayerSheet(
     onQueue: () -> Unit = {},
     isLiked: Boolean = false,
     onToggleLike: () -> Unit = {},
-    chapters: List<com.contentagent.vibestream.data.recommendation.Chapter> = emptyList(),
     onAddToPlaylist: () -> Unit = {},
     moreFromArtist: List<Song> = emptyList(),
     onPlayArtistSong: (Song, List<Song>) -> Unit = { _, _ -> },
@@ -206,29 +205,6 @@ fun FullPlayerSheet(
                     color = TextTertiary,
                     fontSize = 12.sp
                 )
-            }
-
-            if (chapters.size >= 2) {
-                var showChapters by remember { mutableStateOf(false) }
-                val nowIdx = com.contentagent.vibestream.data.recommendation.ChapterPolicy.indexAt(chapters, effectivePosition)
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = (if (nowIdx >= 0) "Now: " + chapters[nowIdx].title + "  " else "") +
-                        "(" + chapters.size + " songs in this recording " + (if (showChapters) "\u25B2" else "\u25BC") + ")",
-                    color = AmberOrange,
-                    fontSize = 13.sp,
-                    modifier = Modifier.fillMaxWidth().clickable { showChapters = !showChapters }.padding(vertical = 6.dp)
-                )
-                if (showChapters) {
-                    chapters.forEachIndexed { i, ch ->
-                        Text(
-                            text = formatMs(ch.startSec * 1000L) + "   " + ch.title,
-                            color = if (i == nowIdx) AmberOrange else TextSecondary,
-                            fontSize = 13.sp,
-                            modifier = Modifier.fillMaxWidth().clickable { onSeekTo(ch.startSec * 1000L) }.padding(vertical = 6.dp)
-                        )
-                    }
-                }
             }
 
             Spacer(modifier = Modifier.height(20.dp))
