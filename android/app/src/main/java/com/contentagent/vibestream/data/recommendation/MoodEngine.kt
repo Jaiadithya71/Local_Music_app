@@ -180,11 +180,11 @@ class MoodRanker(
         var edge = now
         for (e in sorted.asReversed()) {
             val end = e.startMs + e.listenedSec * 1000L
-            if (edge - end > GLIDE_GAP_MS) break
+            if (edge - end > MoodEngine.GLIDE_GAP_MS) break
             n++
             edge = e.startMs
         }
-        if (n >= GLIDE_SONGS) 0.0 else 0.6 * (1.0 - n.toDouble() / GLIDE_SONGS)
+        if (n >= MoodEngine.GLIDE_SONGS) 0.0 else 0.6 * (1.0 - n.toDouble() / MoodEngine.GLIDE_SONGS)
     }
 
     private fun calmBonus(s: Song): Double =
