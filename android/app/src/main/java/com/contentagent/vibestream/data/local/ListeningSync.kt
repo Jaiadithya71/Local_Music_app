@@ -12,15 +12,17 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 /**
- * Optional listening-log sync to a secret GitHub Gist in HIS account. The token lives
- * only on the phone (never in the APK). Without a token nothing is sent anywhere.
- * The gist holds the play log only: song, artist, seconds listened, outcome, source, context.
+ * Sends the play log to his private store (a free Cloudflare Pages function + KV in his own
+ * Cloudflare account), keyed by a random per-install ID. No login or token on the phone.
+ * Can be paused from the cloud-icon dialog. Content: song, artist, seconds listened,
+ * outcome, source, time-of-day and listening context. Nothing else.
  */
 object ListeningSync {
-    private const val FILE = "vibestream_play_log.json"
+    private const val ENDPOINT = "https://vibestream-log-b85d6b.pages.dev/log/"
     private val gson = Gson()
     private val json = "application/json; charset=utf-8".toMediaType()
     private val client = OkHttpClient.Builder().callTimeout(30, TimeUnit.SECONDS).build()
@@ -29,30 +31,31 @@ object ListeningSync {
     private var job: Job? = null
 
     fun init(ctx: Context) {
-        if (prefs == null) prefs = ctx.applicationContext.getSharedPreferences("vibestream_listening_sync", Context.MODE_PRIVATE)
+        if (prefs == null) {
+            val p = ctx.applicationContext.getSharedPreferences("vibestream_listening_sync", Context.MODE_PRIVATE)
+            if (p.getString("install_id", null) == null) {
+                p.edit().putString("install_id", UUID.randomUUID().toString().replace("-", "")).apply()
+            }
+            prefs = p
+        }
         schedule()
     }
 
-    fun connected(): Boolean = !prefs?.getString("token", null).isNullOrBlank()
-    fun gistUrl(): String? = prefs?.getString("gist_url", null)
+    fun connected(): Boolean = prefs != null && prefs?.getBoolean("paused", false) != true
+    fun setPaused(paused: Boolean) { prefs?.edit()?.putBoolean("paused", paused)?.apply(); if (!paused) schedule(500L) }
+    fun installId(): String = prefs?.getString("install_id", "") ?: ""
+
     fun status(): String {
-        val p = prefs ?: return "Not set up"
-        if (p.getString("token", null).isNullOrBlank()) return "Not connected"
+        val p = prefs ?: return "Not ready"
+        if (p.getBoolean("paused", false)) return "Paused"
         val ok = p.getLong("last_ok", 0L)
         val err = p.getString("last_error", null)
         return when {
             err != null -> "Last sync failed: $err"
             ok > 0 -> "Synced " + ((System.currentTimeMillis() - ok) / 60000L) + " min ago"
-            else -> "Connected, waiting for first sync"
+            else -> "Waiting for first sync"
         }
     }
-
-    fun connect(token: String) {
-        prefs?.edit()?.putString("token", token.trim())?.remove("last_error")?.apply()
-        schedule(delayMs = 500L)
-    }
-
-    fun disconnect() { prefs?.edit()?.clear()?.apply() }
 
     /** Debounced: at most one upload per 45 s, always the latest log. */
     fun schedule(delayMs: Long = 45_000L) {
@@ -68,37 +71,15 @@ object ListeningSync {
 
     private fun pushNow() {
         val p = prefs ?: return
-        val token = p.getString("token", null)?.takeIf { it.isNotBlank() } ?: return
+        if (p.getBoolean("paused", false)) return
+        val id = p.getString("install_id", null) ?: return
         try {
             val events = MoodRuntime.store()?.all().orEmpty().takeLast(2000)
-            val payload = mapOf(
-                "updatedAt" to System.currentTimeMillis(),
-                "count" to events.size,
-                "events" to events
-            )
-            val content = gson.toJson(payload)
-            val files = mapOf(FILE to mapOf("content" to content))
-            val id = p.getString("gist_id", null)
-            val body = if (id == null)
-                gson.toJson(mapOf("description" to "VibeStream listening log", "public" to false, "files" to files))
-            else gson.toJson(mapOf("files" to files))
-            val url = if (id == null) "https://api.github.com/gists" else "https://api.github.com/gists/$id"
-            val b = Request.Builder().url(url)
-                .header("Authorization", "Bearer $token")
-                .header("Accept", "application/vnd.github+json")
-                .header("X-GitHub-Api-Version", "2022-11-28")
-            val req = (if (id == null) b.post(body.toRequestBody(json)) else b.patch(body.toRequestBody(json))).build()
+            val body = gson.toJson(mapOf("updatedAt" to System.currentTimeMillis(), "count" to events.size, "events" to events))
+            val req = Request.Builder().url(ENDPOINT + id).put(body.toRequestBody(json)).build()
             client.newCall(req).execute().use { r ->
-                val text = r.body?.string().orEmpty()
-                if (r.isSuccessful) {
-                    val m = gson.fromJson(text, Map::class.java)
-                    val e = p.edit()
-                    (m["id"] as? String)?.let { e.putString("gist_id", it) }
-                    (m["html_url"] as? String)?.let { e.putString("gist_url", it) }
-                    e.putLong("last_ok", System.currentTimeMillis()).remove("last_error").apply()
-                } else {
-                    p.edit().putString("last_error", "HTTP ${r.code}" + if (r.code == 401 || r.code == 404) " (check the token has the gist permission)" else "").apply()
-                }
+                if (r.isSuccessful) p.edit().putLong("last_ok", System.currentTimeMillis()).remove("last_error").apply()
+                else p.edit().putString("last_error", "HTTP ${r.code}").apply()
             }
         } catch (e: Exception) {
             p.edit().putString("last_error", e.javaClass.simpleName).apply()
