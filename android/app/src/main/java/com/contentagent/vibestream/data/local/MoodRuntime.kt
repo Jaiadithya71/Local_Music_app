@@ -109,6 +109,7 @@ object MoodRuntime {
         if (store == null) {
             appCtx = context.applicationContext
             store = PlayEventStore(context.applicationContext)
+            ListeningSync.init(context.applicationContext)
         }
     }
 
@@ -147,7 +148,7 @@ object MoodRuntime {
     }
 
     fun newTracker(isLiked: (String) -> Boolean): PlayEventTracker = PlayEventTracker(
-        sink = { e -> store?.append(e) },
+        sink = { e -> store?.append(e); ListeningSync.schedule() },
         snapshot = { snapshot() },
         isLiked = isLiked
     )

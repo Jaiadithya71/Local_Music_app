@@ -89,6 +89,7 @@ class LibraryStore(context: Context) {
             listenedSec = 0, durationSec = song.durationSec.toInt(),
             outcome = com.contentagent.vibestream.data.recommendation.MoodEngine.SKIP_EARLY, source = "not_for_me"
         ))
+        ListeningSync.schedule()
     }
 
     private inline fun <reified T> load(key: String): List<T> {

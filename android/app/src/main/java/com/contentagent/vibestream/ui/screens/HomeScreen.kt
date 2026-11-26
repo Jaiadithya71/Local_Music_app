@@ -182,6 +182,7 @@ fun HomeScreen(
     var lyricsLoading by remember { mutableStateOf(false) }
     var lyricsResult by remember { mutableStateOf<LyricsRepository.Lyrics?>(null) }
     var showSleepDialog by remember { mutableStateOf(false) }
+    var showListeningSync by remember { mutableStateOf(false) }
     var showEqDialog by remember { mutableStateOf(false) }
     val sleepEndAt by playerController.sleepEndAtMs.collectAsState()
     val deviceVolume by playerController.deviceVolume.collectAsState()
@@ -366,6 +367,9 @@ fun HomeScreen(
                     )
                 }
 
+                IconButton(onClick = { showListeningSync = true }) {
+                    Icon(Icons.Default.Cloud, "Listening sync", tint = if (com.contentagent.vibestream.data.local.ListeningSync.connected()) AmberOrange else TextSecondary)
+                }
                 if (currentSong != null) {
                     IconButton(onClick = { showSleepDialog = true }) {
                         Icon(Icons.Default.Bedtime, "Sleep timer", tint = if (sleepEndAt != null || sleepEndOfTrack) AmberOrange else TextSecondary)
@@ -893,6 +897,7 @@ fun HomeScreen(
             onDismiss = { showSleepDialog = false }
         )
     }
+    if (showListeningSync) { com.contentagent.vibestream.ui.components.ListeningSyncDialog(onDismiss = { showListeningSync = false }) }
     if (showEqDialog) {
         EqualizerDialog(eq = eqManager, onDismiss = { showEqDialog = false })
     }
